@@ -2,17 +2,18 @@
 
 import * as React from "react";
 import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  SquareTerminal,
+  BarChart3,
+  ChefHat,
+  ClipboardList,
+  Home,
+  QrCode,
+  Settings,
+  Store,
+  Users,
+  Utensils,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useOrganization } from "@/contexts/organization-context";
 
 import { NavMain } from "@/components/sidebar/nav-main";
 import { NavProjects } from "@/components/sidebar/nav-projects";
@@ -26,148 +27,166 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-// This is sample data.
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+// Navegación principal del restaurante
+const restaurantNavigation = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: Home,
+    isActive: true,
   },
-  teams: [
-    {
-      name: "Acme Inc",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
-    },
-  ],
-  navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
-};
+  {
+    title: "Mesas",
+    url: "/dashboard/mesas",
+    icon: QrCode,
+    items: [
+      {
+        title: "Ver Mesas",
+        url: "/dashboard/mesas",
+      },
+      {
+        title: "Configurar QR",
+        url: "/dashboard/mesas/qr",
+      },
+      {
+        title: "Estados",
+        url: "/dashboard/mesas/estados",
+      },
+    ],
+  },
+  {
+    title: "Menú",
+    url: "/dashboard/menu",
+    icon: ChefHat,
+    items: [
+      {
+        title: "Categorías",
+        url: "/dashboard/menu/categorias",
+      },
+      {
+        title: "Productos",
+        url: "/dashboard/menu/productos",
+      },
+      {
+        title: "Precios",
+        url: "/dashboard/menu/precios",
+      },
+    ],
+  },
+  {
+    title: "Pedidos",
+    url: "/dashboard/pedidos",
+    icon: ClipboardList,
+    items: [
+      {
+        title: "Activos",
+        url: "/dashboard/pedidos/activos",
+      },
+      {
+        title: "Cocina",
+        url: "/dashboard/pedidos/cocina",
+      },
+      {
+        title: "Historial",
+        url: "/dashboard/pedidos/historial",
+      },
+    ],
+  },
+  {
+    title: "Staff",
+    url: "/dashboard/staff",
+    icon: Users,
+    items: [
+      {
+        title: "Miembros",
+        url: "/dashboard/staff/miembros",
+      },
+      {
+        title: "Roles",
+        url: "/dashboard/staff/roles",
+      },
+      {
+        title: "Invitaciones",
+        url: "/dashboard/staff/invitaciones",
+      },
+    ],
+  },
+  {
+    title: "Configuración",
+    url: "/dashboard/configuracion",
+    icon: Settings,
+    items: [
+      {
+        title: "General",
+        url: "/dashboard/configuracion/general",
+      },
+      {
+        title: "Organización",
+        url: "/dashboard/configuracion/organizacion",
+      },
+      {
+        title: "Cuenta",
+        url: "/dashboard/configuracion/cuenta",
+      },
+    ],
+  },
+];
+
+// Secciones rápidas/accesos directos
+const quickActions = [
+  {
+    name: "Reportes",
+    url: "/dashboard/reportes",
+    icon: BarChart3,
+  },
+  {
+    name: "Punto de Venta",
+    url: "/dashboard/pos",
+    icon: Store,
+  },
+  {
+    name: "Vista Cocina",
+    url: "/dashboard/cocina",
+    icon: Utensils,
+  },
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: session } = useSession();
+  const { currentOrg, organizations, isLoading } = useOrganization();
+
+  // Datos del usuario desde la sesión
+  const userData = session?.user
+    ? {
+        name: session.user.name || "Usuario",
+        email: session.user.email || "",
+        avatar: session.user.image || "/default-avatar.jpg",
+      }
+    : {
+        name: "Cargando...",
+        email: "",
+        avatar: "/default-avatar.jpg",
+      };
+
+  // Convertir organizaciones a formato del TeamSwitcher
+  const restaurantTeams = organizations.map((org) => ({
+    name: org.name,
+    logo: Store,
+    plan: org.ownerId === session?.user?.id ? "Owner" : "Member",
+    id: org.id,
+  }));
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={restaurantTeams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={restaurantNavigation} />
+        <NavProjects projects={quickActions} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={userData} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

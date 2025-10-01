@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { directPrisma as prisma } from "@/lib/prisma-direct";
 import {
   Card,
   CardContent,
@@ -19,7 +19,9 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Buscar organizaciones del usuario
+  // La creación del usuario se maneja en el callback de auth.ts
+
+  // Buscar organizaciones del usuario de forma simplificada
   const userMemberships = await prisma.membership.findMany({
     where: {
       userId: session.user.id,
@@ -27,20 +29,12 @@ export default async function DashboardPage() {
     include: {
       org: true,
     },
-    orderBy: {
-      org: {
-        createdAt: "desc",
-      },
-    },
   });
 
   // Buscar organizaciones propias (como owner)
   const ownedOrgs = await prisma.organization.findMany({
     where: {
       ownerId: session.user.id,
-    },
-    orderBy: {
-      createdAt: "desc",
     },
   });
 
@@ -65,7 +59,17 @@ export default async function DashboardPage() {
               Crea tu primer restaurante para empezar
             </p>
           </div>
-          <CreateOrgForm userId={session.user.id} />
+
+          {session.user.id ? (
+            <CreateOrgForm userId={session.user.id} />
+          ) : (
+            <div className="text-center p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-yellow-800">
+                Error: No se pudo obtener tu ID de usuario. Intenta cerrar
+                sesión y volver a loguearte.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );

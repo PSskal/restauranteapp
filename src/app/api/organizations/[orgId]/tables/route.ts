@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { directPrisma as prisma } from "@/lib/prisma-direct";
 
 export async function GET(
   request: NextRequest,
@@ -69,15 +69,12 @@ export async function POST(
 ) {
   try {
     const { orgId } = await params;
-    
+
     // Verificar autenticación
     const session = await auth();
-    
+
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "No autenticado" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
     // Verificar que el usuario tiene acceso y permisos para crear mesas
@@ -145,10 +142,9 @@ export async function POST(
       success: true,
       message: `Mesa ${number} creada exitosamente`,
     });
-
   } catch (error) {
     console.error("Error creating table:", error);
-    
+
     // Manejar errores específicos de Prisma
     if (error instanceof Error && error.message.includes("Unique constraint")) {
       return NextResponse.json(
@@ -156,7 +152,7 @@ export async function POST(
         { status: 409 }
       );
     }
-    
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

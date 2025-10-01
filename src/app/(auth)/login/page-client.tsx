@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { cn } from "@/lib/utils";
 import { signInWithGoogle, signInWithEmail } from "@/lib/auth-actions";
+import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 
 import { LastUsed, useLastUsed } from "@/components/hooks/useLastUsed";
 import Google from "@/components/shared/icons/google";
@@ -19,11 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function Login() {
-  const { next } = useParams as { next?: string };
+  const { status } = useAuthRedirect(); // Redirigir automáticamente si ya está logueado
 
   const [lastUsed, setLastUsed] = useLastUsed();
-  const authMethods = ["google", "email"] as const;
-  type AuthMethod = (typeof authMethods)[number];
+  type AuthMethod = "google" | "email";
   const [clickedMethod, setClickedMethod] = useState<AuthMethod | undefined>(
     undefined
   );

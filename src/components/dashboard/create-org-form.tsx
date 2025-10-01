@@ -24,6 +24,8 @@ export default function CreateOrgForm({ userId }: CreateOrgFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  console.log("CreateOrgForm - userId:", userId);
+
   // Auto-generar slug basado en el nombre
   const handleNameChange = (value: string) => {
     setName(value);

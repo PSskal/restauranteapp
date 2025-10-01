@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ChefHat, Clock, MapPin, Phone, Utensils } from "lucide-react";
+import { MenuDisplay } from "@/components/menu/menu-display";
 
 interface Table {
   id: string;
@@ -132,24 +133,8 @@ export default function TablePage() {
             </CardHeader>
           </Card>
 
-          {/* Estado del menú */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center space-y-4">
-                <div className="flex items-center justify-center space-x-2 text-amber-600">
-                  <Clock className="h-5 w-5" />
-                  <span className="font-medium">Sistema en desarrollo</span>
-                </div>
-                <p className="text-gray-600">
-                  El menú digital y sistema de pedidos estará disponible
-                  próximamente.
-                </p>
-                <p className="text-sm text-gray-500">
-                  Por el momento, puedes llamar al mesero para hacer tu pedido.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Menú del restaurante */}
+          <MenuDisplay orgId={table.organization.id} />
 
           {/* Acciones disponibles */}
           <div className="space-y-3">
@@ -159,12 +144,12 @@ export default function TablePage() {
               disabled
             >
               <Utensils className="h-5 w-5 mr-2" />
-              Ver Menú (Próximamente)
+              Hacer Pedido (Próximamente)
             </Button>
 
             <Button variant="outline" className="w-full" size="lg" disabled>
               <Clock className="h-5 w-5 mr-2" />
-              Hacer Pedido (Próximamente)
+              Llamar Mesero (Próximamente)
             </Button>
           </div>
 

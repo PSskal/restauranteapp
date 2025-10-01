@@ -7,7 +7,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       {children}
-      <Toaster />
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        toastOptions={{
+          duration: 2000,
+          className: "font-medium",
+        }}
+      />
     </SessionProvider>
   );
 }

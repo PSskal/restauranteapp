@@ -1,0 +1,203 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { directPrisma as prisma } from "@/lib/prisma-direct";
+
+// GET - Listar items de menú
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ orgId: string }> }
+) {
+  try {
+    const { orgId } = await params;
+    const session = await auth();
+    const { searchParams } = new URL(request.url);
+    const categoryId = searchParams.get("categoryId");
+    const activeOnly = searchParams.get("activeOnly") === "true";
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Verificar acceso a la organización
+    const membership = await prisma.membership.findFirst({
+      where: {
+        userId: session.user.id,
+        orgId: orgId,
+      },
+    });
+
+    const isOwner = await prisma.organization.findFirst({
+      where: {
+        id: orgId,
+        ownerId: session.user.id,
+      },
+    });
+
+    if (!membership && !isOwner) {
+      return NextResponse.json(
+        { error: "No tienes acceso a esta organización" },
+        { status: 403 }
+      );
+    }
+
+    // Construir filtros
+    const where = {
+      orgId: orgId,
+      ...(categoryId && { categoryId }),
+      ...(activeOnly && { active: true }),
+    };
+
+    // Obtener items de menú
+    const menuItems = await prisma.menuItem.findMany({
+      where,
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ category: { position: "asc" } }, { name: "asc" }],
+    });
+
+    return NextResponse.json({
+      menuItems: menuItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.priceCents / 100, // Convertir centavos a pesos
+        priceCents: item.priceCents,
+        active: item.active,
+        category: item.category,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching menu items:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Crear nuevo item de menú
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ orgId: string }> }
+) {
+  try {
+    const { orgId } = await params;
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Verificar permisos (solo OWNER y MANAGER)
+    const membership = await prisma.membership.findFirst({
+      where: {
+        userId: session.user.id,
+        orgId: orgId,
+        role: {
+          in: ["OWNER", "MANAGER"],
+        },
+      },
+    });
+
+    const isOwner = await prisma.organization.findFirst({
+      where: {
+        id: orgId,
+        ownerId: session.user.id,
+      },
+    });
+
+    if (!membership && !isOwner) {
+      return NextResponse.json(
+        { error: "No tienes permisos para crear productos" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { name, price, categoryId, active = true } = body;
+
+    // Validaciones
+    if (!name || name.trim().length === 0) {
+      return NextResponse.json(
+        { error: "El nombre del producto es requerido" },
+        { status: 400 }
+      );
+    }
+
+    if (!price || price <= 0) {
+      return NextResponse.json(
+        { error: "El precio debe ser mayor a 0" },
+        { status: 400 }
+      );
+    }
+
+    if (!categoryId) {
+      return NextResponse.json(
+        { error: "La categoría es requerida" },
+        { status: 400 }
+      );
+    }
+
+    // Verificar que la categoría existe y pertenece a la org
+    const category = await prisma.menuCategory.findFirst({
+      where: {
+        id: categoryId,
+        orgId: orgId,
+      },
+    });
+
+    if (!category) {
+      return NextResponse.json(
+        { error: "Categoría no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    // Convertir precio a centavos
+    const priceCents = Math.round(price * 100);
+
+    // Crear el item
+    const menuItem = await prisma.menuItem.create({
+      data: {
+        orgId: orgId,
+        categoryId: categoryId,
+        name: name.trim(),
+        priceCents: priceCents,
+        active: active,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(
+      {
+        menuItem: {
+          id: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.priceCents / 100,
+          priceCents: menuItem.priceCents,
+          active: menuItem.active,
+          category: menuItem.category,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Error creating menu item:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
+  }
+}

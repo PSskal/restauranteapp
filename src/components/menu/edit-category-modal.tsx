@@ -30,6 +30,11 @@ const formSchema = z.object({
     .string()
     .min(1, "El nombre es requerido")
     .max(50, "Máximo 50 caracteres"),
+  imageUrl: z
+    .string()
+    .url("Debe ser una URL válida")
+    .optional()
+    .or(z.literal("")),
 });
 
 interface Category {
@@ -37,6 +42,7 @@ interface Category {
   name: string;
   position: number;
   itemCount: number;
+  imageUrl?: string;
 }
 
 interface EditCategoryModalProps {
@@ -60,6 +66,7 @@ export function EditCategoryModal({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      imageUrl: "",
     },
   });
 
@@ -68,6 +75,7 @@ export function EditCategoryModal({
     if (category && open) {
       form.reset({
         name: category.name,
+        imageUrl: category.imageUrl || "",
       });
     }
   }, [category, open, form]);
@@ -145,6 +153,24 @@ export function EditCategoryModal({
                   <FormControl>
                     <Input
                       placeholder="ej. Bebidas, Platos principales, Postres..."
+                      {...field}
+                      disabled={isLoading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>URL de imagen (opcional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://ejemplo.com/imagen.jpg"
                       {...field}
                       disabled={isLoading}
                     />

@@ -1,28 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useOrganization } from "@/contexts/organization-context";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Loader2, ChefHat, Tag, TrendingUp, Package } from "lucide-react";
+import { ChefHat, Loader2, Package, Tag, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+
+import { DishesPanel } from "@/components/menu/dishes-panel";
 import { CreateCategoryModal } from "@/components/menu/create-category-modal";
 import { CreateMenuItemModal } from "@/components/menu/create-menu-item-modal";
 import { EditCategoryModal } from "@/components/menu/edit-category-modal";
 import { EditMenuItemModal } from "@/components/menu/edit-menu-item-modal";
-import { EmptyState } from "@/components/menu/empty-state";
-import { MenuItemCard } from "@/components/menu/menu-item-card";
-import { CategoryCard } from "@/components/menu/category-card";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { useOrganization } from "@/contexts/organization-context";
+import { CategoryPanel } from "@/components/menu/category-panel";
 
 interface Category {
   id: string;
   name: string;
   position: number;
   itemCount: number;
+  imageUrl?: string;
 }
 
 interface MenuItem {
@@ -31,6 +32,7 @@ interface MenuItem {
   price: number;
   active: boolean;
   description?: string;
+  imageUrl?: string;
   category: {
     id: string;
     name: string;
@@ -44,6 +46,8 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
 
   // Modal states
   const [showCreateCategory, setShowCreateCategory] = useState(false);
@@ -73,7 +77,6 @@ export default function MenuPage() {
 
   const router = useRouter();
 
-  // Función para cargar categorías
   const fetchCategories = useCallback(async () => {
     if (!currentOrg) return;
 
@@ -93,7 +96,6 @@ export default function MenuPage() {
     }
   }, [currentOrg]);
 
-  // Función para cargar items del menú
   const fetchMenuItems = useCallback(async () => {
     if (!currentOrg) return;
 
@@ -113,19 +115,25 @@ export default function MenuPage() {
     }
   }, [currentOrg]);
 
-  // Cargar datos cuando cambie la organización
   useEffect(() => {
     fetchCategories();
     fetchMenuItems();
   }, [fetchCategories, fetchMenuItems]);
 
-  // Refresh data after successful operations
+  useEffect(() => {
+    if (
+      selectedCategoryId !== "all" &&
+      !categories.some((category) => category.id === selectedCategoryId)
+    ) {
+      setSelectedCategoryId("all");
+    }
+  }, [categories, selectedCategoryId]);
+
   const handleDataRefresh = useCallback(() => {
     fetchCategories();
     fetchMenuItems();
   }, [fetchCategories, fetchMenuItems]);
 
-  // Handle menu item actions
   const handleEditMenuItem = (item: MenuItem) => {
     setSelectedMenuItem(item);
     setShowEditMenuItem(true);
@@ -150,8 +158,8 @@ export default function MenuPage() {
         handleDataRefresh();
         toast.success(active ? "Producto activado" : "Producto desactivado", {
           description: active
-            ? "El producto ahora es visible en el menú público."
-            : "El producto se ha ocultado del menú público.",
+            ? "El producto ahora es visible en el men� p�blico."
+            : "El producto se ha ocultado del men� p�blico.",
         });
       } else {
         toast.error("Error al actualizar el producto", {
@@ -160,14 +168,14 @@ export default function MenuPage() {
       }
     } catch (error) {
       console.error("Error toggling item active state:", error);
-      toast.error("Error de conexión", {
+      toast.error("Error de conexi�n", {
         description: "No se pudo conectar con el servidor.",
       });
     }
   };
 
   const handleDeleteMenuItem = (itemId: string) => {
-    const item = menuItems.find((item) => item.id === itemId);
+    const item = menuItems.find((menuItem) => menuItem.id === itemId);
     if (item) {
       setMenuItemToDelete(item);
       setShowDeleteMenuItem(true);
@@ -191,7 +199,7 @@ export default function MenuPage() {
         setShowDeleteMenuItem(false);
         setMenuItemToDelete(null);
         toast.success("Producto eliminado", {
-          description: "El producto ha sido eliminado exitosamente del menú.",
+          description: "El producto ha sido eliminado exitosamente del men�.",
         });
       } else {
         toast.error("Error al eliminar producto", {
@@ -200,7 +208,7 @@ export default function MenuPage() {
       }
     } catch (error) {
       console.error("Error deleting menu item:", error);
-      toast.error("Error de conexión", {
+      toast.error("Error de conexi�n", {
         description: "No se pudo conectar con el servidor.",
       });
     } finally {
@@ -208,8 +216,10 @@ export default function MenuPage() {
     }
   };
 
-  // Handle category actions
-  const handleEditCategory = (category: Category) => {
+  const handleEditCategory = (categoryId: string) => {
+    const category = categories.find((item) => item.id === categoryId);
+    if (!category) return;
+
     setSelectedCategory(category);
     setShowEditCategory(true);
   };
@@ -219,9 +229,9 @@ export default function MenuPage() {
     if (!category) return;
 
     if (category.itemCount > 0) {
-      toast.error("No se puede eliminar la categoría", {
+      toast.error("No se puede eliminar la categor�a", {
         description:
-          "Esta categoría contiene productos. Primero mueve o elimina todos los productos.",
+          "Esta categor�a contiene productos. Primero mueve o elimina todos los productos.",
       });
       return;
     }
@@ -243,20 +253,23 @@ export default function MenuPage() {
       );
 
       if (response.ok) {
+        if (selectedCategoryId === categoryToDelete.id) {
+          setSelectedCategoryId("all");
+        }
         handleDataRefresh();
         setShowDeleteCategory(false);
         setCategoryToDelete(null);
-        toast.success("Categoría eliminada", {
-          description: "La categoría ha sido eliminada exitosamente.",
+        toast.success("Categor�a eliminada", {
+          description: "La categor�a ha sido eliminada exitosamente.",
         });
       } else {
-        toast.error("Error al eliminar categoría", {
-          description: "No se pudo eliminar la categoría.",
+        toast.error("Error al eliminar categor�a", {
+          description: "No se pudo eliminar la categor�a.",
         });
       }
     } catch (error) {
       console.error("Error deleting category:", error);
-      toast.error("Error de conexión", {
+      toast.error("Error de conexi�n", {
         description: "No se pudo conectar con el servidor.",
       });
     } finally {
@@ -264,12 +277,30 @@ export default function MenuPage() {
     }
   };
 
-  // Verificar autenticación
+  const categoriesForPanel = useMemo(
+    () => [
+      {
+        id: "all",
+        name: "All Dishes",
+        itemCount: menuItems.length,
+      },
+      ...categories
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((category) => ({
+          id: category.id,
+          name: category.name,
+          itemCount: category.itemCount,
+        })),
+    ],
+    [categories, menuItems.length]
+  );
+
   if (status === "loading" || orgLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] p-4">
+      <div className="flex min-h-[calc(100vh-200px)] items-center justify-center p-4">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin" />
           <p className="text-muted-foreground">Cargando...</p>
         </div>
       </div>
@@ -283,14 +314,14 @@ export default function MenuPage() {
 
   if (!currentOrg) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] p-4">
+      <div className="flex min-h-[calc(100vh-200px)] items-center justify-center p-4">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900">
-            No tienes acceso a ningún restaurante
+            No tienes acceso a ning�n restaurante
           </h2>
           <p className="mt-2 text-gray-600">
             Necesitas crear un restaurante o ser invitado a uno para gestionar
-            el menú.
+            el men�.
           </p>
           <Button className="mt-4" asChild>
             <a href="/dashboard">Volver al Dashboard</a>
@@ -300,217 +331,77 @@ export default function MenuPage() {
     );
   }
 
+  const activeProducts = menuItems.filter((item) => item.active).length;
+  const inactiveProducts = menuItems.length - activeProducts;
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="border-b pb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Gestión del Menú
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Administra las categorías y productos de{" "}
-              <span className="font-medium">{currentOrg.name}</span>
-            </p>
-          </div>
+    <div className="bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      {/* Main Content Area */}
+      <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+        {/* Category Panel - Hidden on mobile/tablet, shown in modal or as separate view */}
+        <div className="hidden lg:block lg:w-80 border-r border-border bg-card overflow-y-auto">
+          <CategoryPanel
+            categories={categoriesForPanel}
+            selectedCategoryId={selectedCategoryId}
+            onSelectCategory={setSelectedCategoryId}
+            onAddCategory={() => setShowCreateCategory(true)}
+            onEditCategory={(categoryId) => {
+              const category = categories.find((c) => c.id === categoryId);
+              if (category) {
+                setSelectedCategory(category);
+                setShowEditCategory(true);
+              }
+            }}
+            onDeleteCategory={(categoryId) => {
+              const category = categories.find((c) => c.id === categoryId);
+              if (category && category.itemCount === 0) {
+                setCategoryToDelete(category);
+                setShowDeleteCategory(true);
+              }
+            }}
+            isLoading={isLoadingCategories}
+          />
+        </div>
 
-          {/* Quick Stats */}
-          <div className="flex gap-6 text-sm">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
-                {categories.length}
-              </div>
-              <div className="text-muted-foreground">Categorías</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">
-                {menuItems.length}
-              </div>
-              <div className="text-muted-foreground">Productos</div>
-            </div>
-          </div>
+        {/* Dishes Panel - Main content */}
+        <div className="flex-1 overflow-y-auto">
+          <DishesPanel
+            categories={categoriesForPanel}
+            menuItems={menuItems}
+            selectedCategoryId={selectedCategoryId}
+            onCategoryChange={setSelectedCategoryId}
+            onCreateMenuItem={() => setShowCreateMenuItem(true)}
+            onEditMenuItem={(menuItem) => {
+              // Convert MenuItemData to MenuItem for compatibility
+              const convertedItem: MenuItem = {
+                ...menuItem,
+                imageUrl: menuItem.imageUrl || undefined,
+              };
+              handleEditMenuItem(convertedItem);
+            }}
+            onToggleMenuItem={handleToggleItemActive}
+            onDeleteMenuItem={handleDeleteMenuItem}
+            onCreateCategory={() => setShowCreateCategory(true)}
+            onEditCategory={(categoryId) => {
+              const category = categories.find((c) => c.id === categoryId);
+              if (category) {
+                setSelectedCategory(category);
+                setShowEditCategory(true);
+              }
+            }}
+            onDeleteCategory={(categoryId) => {
+              const category = categories.find((c) => c.id === categoryId);
+              if (category && category.itemCount === 0) {
+                setCategoryToDelete(category);
+                setShowDeleteCategory(true);
+              }
+            }}
+            isLoadingCategories={isLoadingCategories}
+            isLoadingMenuItems={isLoadingItems}
+          />
         </div>
       </div>
 
-      {/* Main Content */}
-      <Tabs defaultValue="menu-items" className="space-y-6">
-        <div className="flex items-center justify-between">
-          <TabsList className="grid w-fit grid-cols-2">
-            <TabsTrigger value="menu-items" className="flex items-center gap-2">
-              <ChefHat className="h-4 w-4" />
-              Productos ({menuItems.length})
-            </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Categorías ({categories.length})
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* Products Tab */}
-        <TabsContent value="menu-items" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Productos del Menú</h2>
-              <p className="text-muted-foreground text-sm">
-                Gestiona los productos disponibles en tu menú
-              </p>
-            </div>
-            <Button
-              onClick={() => setShowCreateMenuItem(true)}
-              disabled={categories.length === 0}
-              size="lg"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Producto
-            </Button>
-          </div>
-
-          {isLoadingItems ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : menuItems.length === 0 ? (
-            <EmptyState
-              type="menu-items"
-              hasCategories={categories.length > 0}
-              onCreateCategory={() => setShowCreateCategory(true)}
-              onCreateMenuItem={() => setShowCreateMenuItem(true)}
-            />
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {menuItems.map((item) => (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  onEdit={handleEditMenuItem}
-                  onToggleActive={handleToggleItemActive}
-                  onDelete={handleDeleteMenuItem}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Categories Tab */}
-        <TabsContent value="categories" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Categorías del Menú</h2>
-              <p className="text-muted-foreground text-sm">
-                Organiza tu menú en categorías para una mejor navegación
-              </p>
-            </div>
-            <Button onClick={() => setShowCreateCategory(true)} size="lg">
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Categoría
-            </Button>
-          </div>
-
-          {isLoadingCategories ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : categories.length === 0 ? (
-            <EmptyState
-              type="categories"
-              onCreateCategory={() => setShowCreateCategory(true)}
-            />
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {categories.map((category) => (
-                <CategoryCard
-                  key={category.id}
-                  category={category}
-                  onEdit={handleEditCategory}
-                  onDelete={handleDeleteCategory}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Enhanced Statistics */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-semibold mb-4">Estadísticas del Menú</h3>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-600 text-sm font-medium">
-                    Categorías
-                  </p>
-                  <p className="text-2xl font-bold text-blue-900">
-                    {categories.length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-blue-200 rounded-lg flex items-center justify-center">
-                  <Tag className="h-6 w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-emerald-600 text-sm font-medium">
-                    Total Productos
-                  </p>
-                  <p className="text-2xl font-bold text-emerald-900">
-                    {menuItems.length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-emerald-200 rounded-lg flex items-center justify-center">
-                  <ChefHat className="h-6 w-6 text-emerald-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-green-100">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-600 text-sm font-medium">
-                    Productos Activos
-                  </p>
-                  <p className="text-2xl font-bold text-green-900">
-                    {menuItems.filter((item) => item.active).length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-green-200 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-gray-50 to-gray-100">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    Productos Inactivos
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {menuItems.filter((item) => !item.active).length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Package className="h-6 w-6 text-gray-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Modals */}
       <CreateCategoryModal
         open={showCreateCategory}
         onOpenChange={setShowCreateCategory}
@@ -543,13 +434,12 @@ export default function MenuPage() {
         menuItem={selectedMenuItem}
       />
 
-      {/* Delete Confirmation Dialogs */}
       <DeleteConfirmDialog
         open={showDeleteCategory}
         onOpenChange={setShowDeleteCategory}
         onConfirm={confirmDeleteCategory}
-        title="Eliminar Categoría"
-        description="Esta acción eliminará permanentemente la categoría de tu menú."
+        title="Eliminar Categor�a"
+        description="Esta acci�n eliminar� permanentemente la categor�a de tu men�."
         itemName={categoryToDelete?.name}
         isLoading={isDeletingCategory}
       />
@@ -559,7 +449,7 @@ export default function MenuPage() {
         onOpenChange={setShowDeleteMenuItem}
         onConfirm={confirmDeleteMenuItem}
         title="Eliminar Producto"
-        description="Esta acción eliminará permanentemente el producto de tu menú."
+        description="Esta acci�n eliminar� permanentemente el producto de tu men�."
         itemName={menuItemToDelete?.name}
         isLoading={isDeletingMenuItem}
       />

@@ -65,8 +65,10 @@ export async function GET(
       menuItems: menuItems.map((item) => ({
         id: item.id,
         name: item.name,
+        description: item.description,
         price: item.priceCents / 100, // Convertir centavos a pesos
         priceCents: item.priceCents,
+        imageUrl: item.imageUrl,
         active: item.active,
         category: item.category,
       })),
@@ -119,7 +121,14 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { name, price, categoryId, active = true } = body;
+    const {
+      name,
+      price,
+      categoryId,
+      active = true,
+      description,
+      imageUrl,
+    } = body;
 
     // Validaciones
     if (!name || name.trim().length === 0) {
@@ -167,7 +176,9 @@ export async function POST(
         orgId: orgId,
         categoryId: categoryId,
         name: name.trim(),
+        description: description?.trim() || null,
         priceCents: priceCents,
+        imageUrl: imageUrl?.trim() || null,
         active: active,
       },
       include: {
@@ -185,8 +196,10 @@ export async function POST(
         menuItem: {
           id: menuItem.id,
           name: menuItem.name,
+          description: menuItem.description,
           price: menuItem.priceCents / 100,
           priceCents: menuItem.priceCents,
+          imageUrl: menuItem.imageUrl,
           active: menuItem.active,
           category: menuItem.category,
         },

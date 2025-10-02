@@ -45,6 +45,11 @@ const formSchema = z.object({
   }, "El precio debe ser un número válido mayor a 0"),
   categoryId: z.string().min(1, "Debes seleccionar una categoría"),
   description: z.string().optional(),
+  imageUrl: z
+    .string()
+    .url("Debe ser una URL válida")
+    .optional()
+    .or(z.literal("")),
   active: z.boolean(),
 });
 
@@ -92,6 +97,7 @@ export function EditMenuItemModal({
       price: "",
       categoryId: "",
       description: "",
+      imageUrl: "",
       active: true,
     },
   });
@@ -104,6 +110,7 @@ export function EditMenuItemModal({
         price: menuItem.price.toString(),
         categoryId: menuItem.category.id,
         description: menuItem.description || "",
+        imageUrl: menuItem.imageUrl || "",
         active: menuItem.active,
       });
     }
@@ -260,6 +267,24 @@ export function EditMenuItemModal({
                       placeholder="Describe los ingredientes o características del producto..."
                       className="resize-none"
                       rows={3}
+                      {...field}
+                      disabled={isLoading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>URL de imagen (opcional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://ejemplo.com/imagen.jpg"
                       {...field}
                       disabled={isLoading}
                     />

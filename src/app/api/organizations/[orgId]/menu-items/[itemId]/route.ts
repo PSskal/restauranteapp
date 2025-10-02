@@ -41,7 +41,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, price, categoryId, active } = body;
+    const { name, price, categoryId, active, description, imageUrl } = body;
 
     // Verificar que el item existe y pertenece a la org
     const existingItem = await prisma.menuItem.findFirst({
@@ -93,19 +93,27 @@ export async function PUT(
     // Preparar datos para actualizar
     const updateData: {
       name?: string;
+      description?: string | null;
       priceCents?: number;
       categoryId?: string;
+      imageUrl?: string | null;
       active?: boolean;
     } = {};
 
     if (name !== undefined) {
       updateData.name = name.trim();
     }
+    if (description !== undefined) {
+      updateData.description = description?.trim() || null;
+    }
     if (price !== undefined) {
       updateData.priceCents = Math.round(price * 100);
     }
     if (categoryId !== undefined) {
       updateData.categoryId = categoryId;
+    }
+    if (imageUrl !== undefined) {
+      updateData.imageUrl = imageUrl?.trim() || null;
     }
     if (active !== undefined) {
       updateData.active = active;
@@ -131,8 +139,10 @@ export async function PUT(
       menuItem: {
         id: updatedItem.id,
         name: updatedItem.name,
+        description: updatedItem.description,
         price: updatedItem.priceCents / 100,
         priceCents: updatedItem.priceCents,
+        imageUrl: updatedItem.imageUrl,
         active: updatedItem.active,
         category: updatedItem.category,
       },

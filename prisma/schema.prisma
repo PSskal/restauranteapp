@@ -157,6 +157,8 @@ model MenuCategory {
   orgId     String
   name      String
   position  Int           @default(0)     // Para ordenar categorías en la UI
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   items     MenuItem[]
 
@@ -169,8 +171,12 @@ model MenuItem {
   orgId       String
   categoryId  String
   name        String
+  description String?                       // Descripción del producto
   priceCents  Int                           // Precio en centavos (evita flotantes)
+  imageUrl    String?                       // URL de la imagen del producto
   active      Boolean       @default(true)  // Para ocultar temporalmente de la carta
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   category    MenuCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]

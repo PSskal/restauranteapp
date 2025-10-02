@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { toast } from "sonner";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,11 @@ const formSchema = z.object({
     .string()
     .min(1, "El nombre es requerido")
     .max(50, "Máximo 50 caracteres"),
+  imageUrl: z
+    .string()
+    .url("Debe ser una URL válida")
+    .optional()
+    .or(z.literal("")),
 });
 
 interface CreateCategoryModalProps {
@@ -51,6 +57,7 @@ export function CreateCategoryModal({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      imageUrl: "",
     },
   });
 
@@ -126,6 +133,24 @@ export function CreateCategoryModal({
                   <FormControl>
                     <Input
                       placeholder="ej. Bebidas, Platos principales, Postres..."
+                      {...field}
+                      disabled={isLoading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>URL de imagen (opcional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://ejemplo.com/imagen.jpg"
                       {...field}
                       disabled={isLoading}
                     />

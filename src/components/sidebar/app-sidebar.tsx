@@ -60,6 +60,10 @@ const restaurantNavigation = [
     icon: ChefHat,
     items: [
       {
+        title: "Administrar menú",
+        url: "/dashboard/menu",
+      },
+      {
         title: "Categorías",
         url: "/dashboard/menu/categorias",
       },
@@ -78,6 +82,10 @@ const restaurantNavigation = [
     url: "/dashboard/pedidos",
     icon: ClipboardList,
     items: [
+      {
+        title: "Ver pedidos",
+        url: "/dashboard/pedidos",
+      },
       {
         title: "Activos",
         url: "/dashboard/pedidos/activos",

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { directPrisma as prisma } from "@/lib/prisma-direct";
+import { prisma } from "@/lib/prisma";
 import {
   Card,
   CardContent,
@@ -153,3 +153,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+

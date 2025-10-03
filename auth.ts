@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { directPrisma as prisma } from "@/lib/prisma-direct";
+import { prisma } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -64,3 +64,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
+

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { directPrisma as prisma } from "@/lib/prisma-direct";
+import { prisma } from "@/lib/prisma";
 
 // PUT - Actualizar categoría
 export async function PUT(
@@ -201,3 +201,4 @@ export async function DELETE(
     );
   }
 }
+

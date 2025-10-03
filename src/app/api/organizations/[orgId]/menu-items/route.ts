@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { directPrisma as prisma } from "@/lib/prisma-direct";
+import { prisma } from "@/lib/prisma";
 
 // GET - Listar items de menú
 export async function GET(
@@ -214,3 +214,4 @@ export async function POST(
     );
   }
 }
+

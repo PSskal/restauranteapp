@@ -6,7 +6,6 @@ generator client {
 datasource db { 
   provider = "postgresql"
   url = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 // =============== Enums mínimos (en inglés) ===============
@@ -237,3 +236,5 @@ model Payment {
 
   order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+
+

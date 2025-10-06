@@ -15,6 +15,7 @@ const routeTitles: Record<string, string> = {
   "/dashboard": "Inicio",
   "/dashboard/menu": "Menú",
   "/dashboard/pedidos": "Pedidos",
+  "/dashboard/cocina": "Cocina",
   "/dashboard/mesas": "Mesas",
   "/dashboard/configuracion": "Configuración",
   "/dashboard/analytics": "Analíticas",
@@ -83,3 +84,4 @@ export function DynamicBreadcrumb() {
     </Breadcrumb>
   );
 }
+

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.PLACED,
+  OrderStatus.ACCEPTED,
   OrderStatus.PREPARING,
   OrderStatus.READY,
 ];
@@ -123,6 +124,7 @@ export async function GET(
     const byStatus: Record<OrderStatus, number> = {
       [OrderStatus.DRAFT]: 0,
       [OrderStatus.PLACED]: 0,
+      [OrderStatus.ACCEPTED]: 0,
       [OrderStatus.PREPARING]: 0,
       [OrderStatus.READY]: 0,
       [OrderStatus.SERVED]: 0,
@@ -185,3 +187,4 @@ export async function GET(
     );
   }
 }
+

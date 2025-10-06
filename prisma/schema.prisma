@@ -19,13 +19,14 @@ enum Role {
 }
 
 // Estados principales del pedido para un MVP sencillo
-enum OrderStatus { 
-  DRAFT 
-  PLACED 
-  PREPARING 
-  READY 
-  SERVED 
-  CANCELLED 
+enum OrderStatus {
+  DRAFT
+  PLACED
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
 }
 
 // Métodos de pago manuales (sin integraciones online)
@@ -236,5 +237,7 @@ model Payment {
 
   order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+
+
 
 

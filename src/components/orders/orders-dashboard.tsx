@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   CheckCircle2,
+  CircleCheck,
   ChefHat,
   ClipboardList,
   DollarSign,
@@ -32,6 +33,7 @@ import { Switch } from "@/components/ui/switch";
 type OrderStatus =
   | "DRAFT"
   | "PLACED"
+  | "ACCEPTED"
   | "PREPARING"
   | "READY"
   | "SERVED"
@@ -71,24 +73,25 @@ type Metrics = {
 const statusLabels: Record<OrderStatus, string> = {
   DRAFT: "Borrador",
   PLACED: "Nuevo",
+  ACCEPTED: "Aceptado",
   PREPARING: "Preparando",
   READY: "Listo",
   SERVED: "Servido",
   CANCELLED: "Cancelado",
 };
-
 const statusBadgeVariants: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
   DRAFT: "secondary",
   PLACED: "default",
+  ACCEPTED: "default",
   PREPARING: "default",
   READY: "default",
   SERVED: "secondary",
   CANCELLED: "destructive",
 };
-
 const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   DRAFT: ["PLACED", "CANCELLED"],
-  PLACED: ["PREPARING", "CANCELLED"],
+  PLACED: ["ACCEPTED", "CANCELLED"],
+  ACCEPTED: ["PREPARING", "CANCELLED"],
   PREPARING: ["READY", "CANCELLED"],
   READY: ["SERVED", "CANCELLED"],
   SERVED: [],
@@ -97,13 +100,13 @@ const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
 
 const statusIcons: Partial<Record<OrderStatus, JSX.Element>> = {
   PLACED: <Plus className="h-4 w-4" />,
+  ACCEPTED: <CircleCheck className="h-4 w-4" />,
   PREPARING: <ChefHat className="h-4 w-4" />,
   READY: <CheckCircle2 className="h-4 w-4" />,
   SERVED: <UtensilsCrossed className="h-4 w-4" />,
   CANCELLED: <XCircle className="h-4 w-4" />,
 };
-
-const ACTIVE_STATUSES: OrderStatus[] = ["PLACED", "PREPARING", "READY"];
+const ACTIVE_STATUSES: OrderStatus[] = ["PLACED", "ACCEPTED", "PREPARING", "READY"];
 
 const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -196,12 +199,12 @@ export function OrdersDashboard() {
     const grouped: Record<OrderStatus, StaffOrder[]> = {
       DRAFT: [],
       PLACED: [],
+      ACCEPTED: [],
       PREPARING: [],
       READY: [],
       SERVED: [],
       CANCELLED: [],
     };
-
     orders.forEach((order) => {
       grouped[order.status].push(order);
     });
@@ -420,6 +423,8 @@ function columnDescription(status: OrderStatus) {
   switch (status) {
     case "PLACED":
       return "Pedidos nuevos esperando confirmacion.";
+    case "ACCEPTED":
+      return "Confirmados por staff, listos para cocina.";
     case "PREPARING":
       return "En cocina / barra.";
     case "READY":
@@ -428,7 +433,6 @@ function columnDescription(status: OrderStatus) {
       return "";
   }
 }
-
 type OrderColumnProps = {
   title: string;
   description: string;
@@ -538,7 +542,7 @@ function OrderCard({ order, updating, onStatusChange }: OrderCardProps) {
               ) : (
                 statusIcons[status] ?? <Plus className="h-4 w-4" />
               )}
-              {status === "CANCELLED" ? "Cancelar" : statusLabels[status]}
+              {status === "CANCELLED" ? "Cancelar" : status === "ACCEPTED" ? "Aceptar" : statusLabels[status]}
             </Button>
           ))}
         </div>
@@ -609,6 +613,26 @@ function HistorySection({ served, cancelled }: HistorySectionProps) {
     </Card>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

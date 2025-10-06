@@ -39,85 +39,21 @@ const restaurantNavigation = [
     title: "Mesas",
     url: "/dashboard/mesas",
     icon: QrCode,
-    items: [
-      {
-        title: "Ver Mesas",
-        url: "/dashboard/mesas",
-      },
-      {
-        title: "Configurar QR",
-        url: "/dashboard/mesas/qr",
-      },
-      {
-        title: "Estados",
-        url: "/dashboard/mesas/estados",
-      },
-    ],
   },
   {
     title: "Menú",
     url: "/dashboard/menu",
     icon: ChefHat,
-    items: [
-      {
-        title: "Administrar menú",
-        url: "/dashboard/menu",
-      },
-      {
-        title: "Categorías",
-        url: "/dashboard/menu/categorias",
-      },
-      {
-        title: "Productos",
-        url: "/dashboard/menu/productos",
-      },
-      {
-        title: "Precios",
-        url: "/dashboard/menu/precios",
-      },
-    ],
   },
   {
     title: "Pedidos",
     url: "/dashboard/pedidos",
     icon: ClipboardList,
-    items: [
-      {
-        title: "Ver pedidos",
-        url: "/dashboard/pedidos",
-      },
-      {
-        title: "Activos",
-        url: "/dashboard/pedidos/activos",
-      },
-      {
-        title: "Cocina",
-        url: "/dashboard/pedidos/cocina",
-      },
-      {
-        title: "Historial",
-        url: "/dashboard/pedidos/historial",
-      },
-    ],
   },
   {
     title: "Staff",
     url: "/dashboard/staff",
     icon: Users,
-    items: [
-      {
-        title: "Miembros",
-        url: "/dashboard/staff/miembros",
-      },
-      {
-        title: "Roles",
-        url: "/dashboard/staff/roles",
-      },
-      {
-        title: "Invitaciones",
-        url: "/dashboard/staff/invitaciones",
-      },
-    ],
   },
   {
     title: "Configuración",
@@ -129,12 +65,20 @@ const restaurantNavigation = [
         url: "/dashboard/configuracion/general",
       },
       {
-        title: "Organización",
-        url: "/dashboard/configuracion/organizacion",
+        title: "Restaurante",
+        url: "/dashboard/configuracion/restaurante",
       },
       {
-        title: "Cuenta",
-        url: "/dashboard/configuracion/cuenta",
+        title: "Mesas",
+        url: "/dashboard/configuracion/mesas",
+      },
+      {
+        title: "Categorías",
+        url: "/dashboard/configuracion/categorias",
+      },
+      {
+        title: "Personal",
+        url: "/dashboard/configuracion/personal",
       },
     ],
   },

@@ -10,7 +10,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserPlus, Mail, Crown, Shield, User } from "lucide-react";
+import { Users, Mail, Crown, Shield, User } from "lucide-react";
+import { InviteStaffDialog } from "@/components/staff/invite-staff-dialog";
+import { PendingInvitationActions } from "@/components/staff/pending-invitation-actions";
 
 export default async function StaffPage() {
   // Verificar autenticación
@@ -154,10 +156,10 @@ export default async function StaffPage() {
           </p>
         </div>
         {canManageStaff && (
-          <Button>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Invitar Personal
-          </Button>
+          <InviteStaffDialog
+            orgId={currentOrg.id}
+            orgName={currentOrg.name}
+          />
         )}
       </div>
 
@@ -250,13 +252,6 @@ export default async function StaffPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="default">
-                  <Crown className="h-3 w-3 mr-1" />
-                  Propietario
-                </Badge>
-                {isOwner && <Badge variant="outline">Tú</Badge>}
-              </div>
             </div>
 
             {/* Otros miembros */}
@@ -287,21 +282,6 @@ export default async function StaffPage() {
                         {membership.user.email}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={getRoleColor(membership.role)}>
-                      <RoleIcon className="h-3 w-3 mr-1" />
-                      {getRoleText(membership.role)}
-                    </Badge>
-                    {membership.userId === session.user?.id && (
-                      <Badge variant="outline">Tú</Badge>
-                    )}
-                    {canManageStaff &&
-                      membership.userId !== session.user?.id && (
-                        <Button variant="outline" size="sm">
-                          Gestionar
-                        </Button>
-                      )}
                   </div>
                 </div>
               );
@@ -336,23 +316,25 @@ export default async function StaffPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="text-orange-600 border-orange-300"
-                    >
-                      Pendiente
-                    </Badge>
-                    {canManageStaff && (
-                      <Button
+                    <div className="flex items-center gap-3">
+                      <Badge
                         variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
+                        className="text-orange-600 border-orange-300"
                       >
-                        Cancelar
-                      </Button>
-                    )}
-                  </div>
+                        Pendiente
+                      </Badge>
+                      {canManageStaff ? (
+                        <PendingInvitationActions
+                          orgId={currentOrg.id}
+                          invitation={{
+                            id: invitation.id,
+                            email: invitation.email,
+                            role: invitation.role,
+                            expiresAt: invitation.expiresAt,
+                          }}
+                        />
+                      ) : null}
+                    </div>
                 </div>
               ))}
             </div>
@@ -362,3 +344,4 @@ export default async function StaffPage() {
     </div>
   );
 }
+

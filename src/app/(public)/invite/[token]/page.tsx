@@ -31,19 +31,20 @@ function getRoleLabel(role: string) {
 export default async function InviteTokenPage({
   params,
 }: {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }) {
   const session = await auth();
+  const { token } = await params;
 
   if (!session?.user?.id) {
-    const callbackUrl = encodeURIComponent(`/invite/${params.token}`);
+    const callbackUrl = encodeURIComponent(`/invite/${token}`);
     redirect(`/login?callbackUrl=${callbackUrl}`);
   }
 
   const userEmail = session.user.email?.toLowerCase();
 
   const invitation = await prisma.invitation.findUnique({
-    where: { token: params.token },
+    where: { token },
     include: {
       org: {
         select: {
@@ -61,7 +62,8 @@ export default async function InviteTokenPage({
           <CardHeader>
             <CardTitle>Invitacion no encontrada</CardTitle>
             <CardDescription>
-              Verifica que el enlace sea correcto o solicita una nueva invitacion.
+              Verifica que el enlace sea correcto o solicita una nueva
+              invitacion.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -110,25 +112,30 @@ export default async function InviteTokenPage({
                 </p>
               </div>
               {isExpired ? <Badge variant="destructive">Expirada</Badge> : null}
-              {alreadyAccepted ? <Badge variant="secondary">Aceptada</Badge> : null}
+              {alreadyAccepted ? (
+                <Badge variant="secondary">Aceptada</Badge>
+              ) : null}
             </div>
           </div>
 
           {!emailMatches && (
             <p className="text-sm text-red-600">
-              Debes iniciar sesion con el correo {invitation.email} para aceptar esta invitacion.
+              Debes iniciar sesion con el correo {invitation.email} para aceptar
+              esta invitacion.
             </p>
           )}
 
           {alreadyAccepted && (
             <p className="text-sm text-muted-foreground">
-              Esta invitacion ya fue aceptada anteriormente. Puedes acceder desde el dashboard.
+              Esta invitacion ya fue aceptada anteriormente. Puedes acceder
+              desde el dashboard.
             </p>
           )}
 
           {isExpired && (
             <p className="text-sm text-muted-foreground">
-              El enlace expiro. Pide a un administrador que envie una nueva invitacion.
+              El enlace expiro. Pide a un administrador que envie una nueva
+              invitacion.
             </p>
           )}
 

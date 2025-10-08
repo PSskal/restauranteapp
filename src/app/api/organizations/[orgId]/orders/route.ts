@@ -1,8 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OrderStatus } from "@prisma/client";
-
+import { OrderStatus, Role } from "@prisma/client";
+import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+
+const ALLOWED_POS_ROLES: Role[] = [
+  Role.OWNER,
+  Role.MANAGER,
+  Role.CASHIER,
+  Role.WAITER,
+];
+
+const itemSchema = z.object({
+  menuItemId: z.string().min(1, "Producto requerido"),
+  quantity: z
+    .number({ invalid_type_error: "Cantidad invalida" })
+    .int("La cantidad debe ser entera")
+    .min(1, "Minimo 1 unidad")
+    .max(20, "Maximo 20 unidades por producto"),
+  notes: z.string().trim().max(200, "Maximo 200 caracteres").optional(),
+});
+
+const createOrderSchema = z.object({
+  tableId: z.string().min(1, "Id de mesa invalido").optional(),
+  notes: z
+    .string()
+    .trim()
+    .max(300, "Maximo 300 caracteres para notas")
+    .optional(),
+  items: z.array(itemSchema).min(1, "Agrega al menos un producto"),
+  autoAccept: z.boolean().optional(),
+});
 
 const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.PLACED,
@@ -10,6 +38,208 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.PREPARING,
   OrderStatus.READY,
 ];
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ orgId: string }> }
+) {
+  try {
+    const { orgId } = await params;
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const [membership, isOwner] = await Promise.all([
+      prisma.membership.findFirst({
+        where: {
+          userId: session.user.id,
+          orgId,
+          role: {
+            in: ALLOWED_POS_ROLES,
+          },
+        },
+      }),
+      prisma.organization.findFirst({
+        where: {
+          id: orgId,
+          ownerId: session.user.id,
+        },
+      }),
+    ]);
+
+    if (!membership && !isOwner) {
+      return NextResponse.json(
+        { error: "No tienes permisos para crear pedidos" },
+        { status: 403 }
+      );
+    }
+
+    let jsonBody: unknown;
+
+    try {
+      jsonBody = await request.json();
+    } catch {
+      return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
+    }
+
+    const parsed = createOrderSchema.safeParse(jsonBody);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Datos invalidos", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { items, tableId, notes, autoAccept } = parsed.data;
+
+    if (tableId) {
+      const table = await prisma.table.findFirst({
+        where: {
+          id: tableId,
+          orgId,
+        },
+        select: { id: true },
+      });
+
+      if (!table) {
+        return NextResponse.json(
+          { error: "La mesa indicada no pertenece al restaurante" },
+          { status: 404 }
+        );
+      }
+    }
+
+    const uniqueItemIds = [...new Set(items.map((item) => item.menuItemId))];
+
+    const menuItems = await prisma.menuItem.findMany({
+      where: {
+        id: { in: uniqueItemIds },
+        orgId,
+        active: true,
+      },
+    });
+
+    if (menuItems.length !== uniqueItemIds.length) {
+      return NextResponse.json(
+        { error: "Algunos productos no estan disponibles" },
+        { status: 400 }
+      );
+    }
+
+    const cartItems = items.map((item) => {
+      const menuItem = menuItems.find((mi) => mi.id === item.menuItemId);
+
+      if (!menuItem) {
+        throw new Error("Producto faltante tras validacion");
+      }
+
+      const quantity = item.quantity;
+      const priceC = menuItem.priceCents;
+      const totalC = priceC * quantity;
+
+      return {
+        menuItemId: menuItem.id,
+        name: menuItem.name,
+        quantity,
+        priceC,
+        totalC,
+        notes: item.notes?.trim() || null,
+      };
+    });
+
+    const totalC = cartItems.reduce((sum, item) => sum + item.totalC, 0);
+
+    const order = await prisma.$transaction(async (tx) => {
+      const lastOrder = await tx.order.findFirst({
+        where: { orgId },
+        orderBy: { number: "desc" },
+        select: { number: true },
+      });
+
+      const nextOrderNumber = (lastOrder?.number ?? 0) + 1;
+
+      return tx.order.create({
+        data: {
+          orgId,
+          tableId: tableId ?? null,
+          number: nextOrderNumber,
+          status: autoAccept ? OrderStatus.ACCEPTED : OrderStatus.PLACED,
+          notes: notes?.trim() || null,
+          totalC,
+          createdById: session.user.id,
+          items: {
+            create: cartItems,
+          },
+        },
+        include: {
+          items: {
+            select: {
+              id: true,
+              name: true,
+              quantity: true,
+              priceC: true,
+              totalC: true,
+              notes: true,
+            },
+          },
+          table: {
+            select: {
+              id: true,
+              number: true,
+            },
+          },
+        },
+      });
+    });
+
+    return NextResponse.json(
+      {
+        order: {
+          id: order.id,
+          number: order.number,
+          status: order.status,
+          totalC: order.totalC,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt,
+          notes: order.notes,
+          table: order.table
+            ? {
+                id: order.table.id,
+                number: order.table.number,
+              }
+            : null,
+          items: order.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            priceC: item.priceC,
+            totalC: item.totalC,
+            notes: item.notes,
+          })),
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    const maybe = error as { code?: string } | undefined;
+
+    if (maybe?.code === "P1001") {
+      console.error("DB unreachable (P1001) creating staff order", error);
+      return NextResponse.json(
+        { error: "Servicio no disponible. Intenta en unos segundos." },
+        { status: 503 }
+      );
+    }
+    console.error("Error creating staff order:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -187,4 +417,6 @@ export async function GET(
     );
   }
 }
+
+
 

@@ -66,7 +66,9 @@ export function CreateTableModal({
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(`Mesa ${number} creada exitosamente`);
+        setSuccess(
+          `Mesa ${number} creada. Recuerda habilitarla cuando haya comensales.`
+        );
         setNumber("");
         onTableCreated(); // Recargar la lista de mesas
 
@@ -101,7 +103,7 @@ export function CreateTableModal({
         <DialogHeader>
           <DialogTitle>Crear Nueva Mesa</DialogTitle>
           <DialogDescription>
-            Agrega una nueva mesa al restaurante {currentOrg?.name}
+            Agrega una nueva mesa al restaurante {currentOrg?.name}. Las mesas nuevas se crean deshabilitadas hasta que las habilites desde la lista.
           </DialogDescription>
         </DialogHeader>
 

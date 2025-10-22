@@ -89,6 +89,13 @@ export async function POST(
       );
     }
 
+    if (!table.isEnabled) {
+      return NextResponse.json(
+        { error: "La mesa no está disponible en este momento" },
+        { status: 409 }
+      );
+    }
+
     const uniqueItemIds = [...new Set(items.map((item) => item.menuItemId))];
 
     const menuItems = await prisma.menuItem.findMany({

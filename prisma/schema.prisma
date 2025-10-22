@@ -144,6 +144,7 @@ model Table {
   orgId     String
   number    Int
   qrToken   String        @default(uuid()) // Token para URL pública del QR
+  isEnabled Boolean       @default(false)
   org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orders    Order[]
 

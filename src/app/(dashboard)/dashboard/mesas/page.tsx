@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -30,17 +31,18 @@ import {
 } from "lucide-react";
 import { CreateTableModal } from "@/components/tables/create-table-modal";
 import { QRCodeCanvas } from "@/components/qr/qr-code-canvas";
-import Image from "next/image";
+import { toast } from "sonner";
 
 interface Table {
   id: string;
   number: number;
   qrToken: string;
   orgId: string;
+  isEnabled: boolean;
 }
 
 export default function MesasPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const { currentOrg, isLoading: orgLoading } = useOrganization();
   const [tables, setTables] = useState<Table[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
@@ -48,8 +50,9 @@ export default function MesasPage() {
   const [selectedTableForQR, setSelectedTableForQR] = useState<Table | null>(
     null
   );
-  const [qrImageUrl, setQrImageUrl] = useState<string>("");
+  const [updatingTableId, setUpdatingTableId] = useState<string | null>(null);
   const router = useRouter();
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   // Función para cargar mesas
   const fetchTables = useCallback(async () => {
@@ -79,61 +82,140 @@ export default function MesasPage() {
   // Función para ver QR de una mesa
   const handleViewQR = async (table: Table) => {
     setSelectedTableForQR(table);
-    const qrUrl = `/api/qr/${table.id}`;
-    setQrImageUrl(qrUrl);
   };
+
+  const handleToggleTable = useCallback(
+    async (table: Table, nextValue: boolean) => {
+      if (!currentOrg) {
+        return;
+      }
+
+      setUpdatingTableId(table.id);
+      try {
+        const response = await fetch(
+          `/api/organizations/${currentOrg.id}/tables`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              tableId: table.id,
+              isEnabled: nextValue,
+            }),
+          }
+        );
+
+        const payload = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "No pudimos actualizar la mesa");
+        }
+
+        setTables((prev) =>
+          prev.map((entry) =>
+            entry.id === table.id ? { ...entry, isEnabled: nextValue } : entry
+          )
+        );
+
+        toast.success(
+          nextValue
+            ? `Mesa ${table.number} habilitada`
+            : `Mesa ${table.number} deshabilitada`
+        );
+      } catch (error) {
+        console.error("Error toggling table state:", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Error inesperado al actualizar la mesa";
+        toast.error(message);
+      } finally {
+        setUpdatingTableId(null);
+      }
+    },
+    [currentOrg]
+  );
 
   // Función para imprimir QR codes
   const handlePrintQRs = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+    // Fetch each QR image as a blob and convert to data URLs, then open print window with inlined images.
+    const blobToDataURL = (blob: Blob) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
 
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Códigos QR - ${currentOrg?.name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
-            .qr-item { text-align: center; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
-            .qr-item h3 { margin-bottom: 10px; }
-            .qr-item img { width: 200px; height: 200px; margin: 10px 0; }
-            .qr-item p { font-size: 12px; color: #666; }
-            @media print { 
-              body { margin: 0; }
-              .qr-item { page-break-inside: avoid; }
-            }
-          </style>
-        </head>
-        <body>
-          <h1>Códigos QR - ${currentOrg?.name}</h1>
-          <div class="qr-grid">
-            ${tables
-              .map(
-                (table) => `
-              <div class="qr-item">
-                <h3>Mesa ${table.number}</h3>
-                <img src="/api/qr/${table.id}" alt="QR Mesa ${table.number}" />
-                <p>Escanea para hacer tu pedido</p>
-                <p style="font-size: 10px;">URL: ${window.location.origin}/table/${table.qrToken}</p>
-              </div>
-            `
-              )
-              .join("")}
-          </div>
-        </body>
-      </html>
-    `;
+    (async () => {
+      const items = await Promise.all(
+        tables.map(async (table) => {
+          try {
+            const res = await fetch(`/api/qr/${table.id}`);
+            if (!res.ok) throw new Error("fetch failed");
+            const blob = await res.blob();
+            const dataUrl = await blobToDataURL(blob);
+            return { table, dataUrl };
+          } catch {
+            // fallback to endpoint URL if blob fetch fails
+            return { table, dataUrl: `/api/qr/${table.id}` };
+          }
+        })
+      );
 
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 500);
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return;
+
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Códigos QR - ${currentOrg?.name}</title>
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <style>
+              body { font-family: Arial, sans-serif; margin: 12px; }
+              .qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+              .qr-item { text-align: center; border: 1px solid #e5e7eb; padding: 12px; border-radius: 8px; }
+              .qr-item h3 { margin-bottom: 8px; font-size: 16px; }
+              .qr-item img { width: 200px; height: 200px; object-fit: contain; }
+              .qr-item p { font-size: 12px; color: #4b5563; margin: 6px 0 0; }
+              @media print { body { margin: 0; } .qr-item { page-break-inside: avoid; } }
+            </style>
+          </head>
+          <body>
+            <h1 style="font-size:18px; margin-bottom:12px;">Códigos QR - ${currentOrg?.name}</h1>
+            <div class="qr-grid">
+              ${items
+                .map(
+                  ({ table, dataUrl }) => `
+                    <div class="qr-item">
+                      <h3>Mesa ${table.number}</h3>
+                      <img src="${dataUrl}" alt="QR Mesa ${table.number}" />
+                      <p>Escanea para hacer tu pedido</p>
+                      <p style="font-size:10px; color:#6b7280;">URL: ${
+                        baseUrl
+                          ? `${baseUrl}/table/${table.qrToken}`
+                          : `/table/${table.qrToken}`
+                      }</p>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 400);
+    })();
   };
 
   // Verificar autenticación
-  if (status === "loading" || orgLoading) {
+  if (status === "loading" || orgLoading || isLoadingTables) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)] p-4">
         <div className="text-center">
@@ -167,6 +249,10 @@ export default function MesasPage() {
       </div>
     );
   }
+
+  const enabledCount = tables.filter((table) => table.isEnabled).length;
+  const disabledCount = tables.length - enabledCount;
+  const lastTable = tables.length > 0 ? tables[tables.length - 1] : null;
 
   return (
     <div className="space-y-6">
@@ -219,22 +305,50 @@ export default function MesasPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">Mesa {table.number}</CardTitle>
-                  <Badge variant="outline" className="text-xs">
-                    QR Activo
+                  <Badge
+                    variant={table.isEnabled ? "default" : "outline"}
+                    className={`text-xs ${
+                      table.isEnabled
+                        ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {table.isEnabled ? "Habilitada" : "Deshabilitada"}
                   </Badge>
                 </div>
                 <CardDescription className="text-xs">
                   Token: {table.qrToken.slice(0, 8)}...
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg">
                   <QRCodeCanvas
-                    url={`${window.location.origin}/table/${table.qrToken}`}
+                    url={`${baseUrl}/table/${table.qrToken}`}
                     size={120}
                     className="rounded"
                   />
                 </div>
+
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium">Habilitar pedidos</p>
+                    <p className="text-xs text-muted-foreground">
+                      Activa la mesa solo cuando haya comensales presentes.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={table.isEnabled}
+                    onCheckedChange={(value) => handleToggleTable(table, value)}
+                    disabled={updatingTableId === table.id}
+                  />
+                </div>
+
+                {updatingTableId === table.id ? (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Guardando cambios...
+                  </p>
+                ) : null}
 
                 <div className="flex gap-2">
                   <Button
@@ -268,7 +382,10 @@ export default function MesasPage() {
                 </div>
 
                 <div className="text-xs text-muted-foreground text-center">
-                  URL: /mesa/{table.qrToken}
+                  URL:{" "}
+                  {baseUrl
+                    ? `${baseUrl}/table/${table.qrToken}`
+                    : `/table/${table.qrToken}`}
                 </div>
               </CardContent>
             </Card>
@@ -291,14 +408,34 @@ export default function MesasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Códigos QR Activos
+              Mesas habilitadas
             </CardTitle>
-            <div className="h-4 w-4 bg-green-500 rounded-full"></div>
+            <div className="h-4 w-4 bg-emerald-500 rounded-full"></div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {tables.length}
+              {enabledCount}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Disponibles para recibir pedidos
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Mesas deshabilitadas
+            </CardTitle>
+            <div className="h-4 w-4 bg-red-500 rounded-full"></div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {disabledCount}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Activa solo cuando lleguen comensales
+            </p>
           </CardContent>
         </Card>
 
@@ -306,23 +443,20 @@ export default function MesasPage() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Última Mesa</CardTitle>
             <Badge variant="outline">
-              #{tables[tables.length - 1]?.number || "N/A"}
+              #{lastTable?.number ?? "N/A"}
             </Badge>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tables[tables.length - 1]?.number || 0}
+              {lastTable?.number ?? 0}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Estado</CardTitle>
-            <div className="h-4 w-4 bg-blue-500 rounded-full"></div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">Activo</div>
+            <p className="text-xs text-muted-foreground">
+              {lastTable
+                ? lastTable.isEnabled
+                  ? "Actualmente habilitada"
+                  : "Actualmente deshabilitada"
+                : "Sin registros"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -345,21 +479,23 @@ export default function MesasPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center space-y-4">
-            {qrImageUrl && (
-              <Image
-                src={qrImageUrl}
-                alt={`QR Mesa ${selectedTableForQR?.number}`}
-                width={300}
-                height={300}
-                className="rounded-lg border"
-              />
+            {selectedTableForQR && (
+              <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <QRCodeCanvas
+                  url={`${typeof window !== "undefined" ? window.location.origin : ""}/table/${selectedTableForQR.qrToken}`}
+                  size={260}
+                  className="rounded"
+                />
+              </div>
             )}
             <div className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">
                 Los clientes pueden escanear este código para hacer pedidos
               </p>
               <p className="text-xs font-mono bg-gray-100 p-2 rounded">
-                {window.location.origin}/table/{selectedTableForQR?.qrToken}
+                {typeof window !== "undefined"
+                  ? `${window.location.origin}/table/${selectedTableForQR?.qrToken}`
+                  : `/table/${selectedTableForQR?.qrToken}`}
               </p>
             </div>
             <div className="flex gap-2 w-full">
@@ -382,31 +518,55 @@ export default function MesasPage() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
-                  if (selectedTableForQR) {
-                    const printWindow = window.open("", "_blank");
-                    if (printWindow) {
-                      printWindow.document.write(`
-                        <!DOCTYPE html>
-                        <html>
-                          <head>
-                            <title>QR Mesa ${selectedTableForQR.number}</title>
-                            <style>
-                              body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: Arial, sans-serif; }
-                              h1 { margin-bottom: 20px; }
-                              img { border: 1px solid #ddd; border-radius: 8px; }
-                              p { margin-top: 20px; text-align: center; }
-                            </style>
-                          </head>
-                          <body>
-                            <h1>Mesa ${selectedTableForQR.number}</h1>
-                            <img src="/api/qr/${selectedTableForQR.id}" width="300" height="300" />
-                            <p>Escanea para hacer tu pedido</p>
-                          </body>
-                        </html>
-                      `);
-                      printWindow.document.close();
-                      printWindow.print();
+                  if (!selectedTableForQR) return;
+
+                  // Try to find a canvas inside the dialog and use its data URL for printing
+                  const dialog = document.querySelector("[role='dialog']");
+                  let dataUrl: string | null = null;
+                  if (dialog) {
+                    const canvas = dialog.querySelector(
+                      "canvas"
+                    ) as HTMLCanvasElement | null;
+                    if (canvas) {
+                      try {
+                        dataUrl = canvas.toDataURL("image/png");
+                      } catch {
+                        dataUrl = null;
+                      }
                     }
+                  }
+
+                  const doPrint = (imgSrc: string) => {
+                    const printWindow = window.open("", "_blank");
+                    if (!printWindow) return;
+                    printWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <title>QR Mesa ${selectedTableForQR.number}</title>
+                          <style>
+                            body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: Arial, sans-serif; }
+                            h1 { margin-bottom: 20px; }
+                            img { border: 1px solid #ddd; border-radius: 8px; }
+                            p { margin-top: 20px; text-align: center; }
+                          </style>
+                        </head>
+                        <body>
+                          <h1>Mesa ${selectedTableForQR.number}</h1>
+                          <img src="${imgSrc}" width="300" height="300" />
+                          <p>Escanea para hacer tu pedido</p>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  };
+
+                  if (dataUrl) {
+                    doPrint(dataUrl);
+                  } else {
+                    // fallback to server endpoint
+                    doPrint(`/api/qr/${selectedTableForQR.id}`);
                   }
                 }}
               >

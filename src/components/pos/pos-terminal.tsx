@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowRight,
+  Loader2,
   Minus,
   Plus,
   RefreshCcw,
   ShoppingCart,
   Trash2,
+  Printer,
+  UtensilsCrossed,
+  Wallet,
 } from "lucide-react";
+import Image from "next/image";
 
 import { useOrganization } from "@/contexts/organization-context";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +29,13 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const formatCurrency = (cents: number) => "$" + (cents / 100).toFixed(2);
 
@@ -54,6 +65,12 @@ type CartItem = {
   quantity: number;
 };
 
+type TableSummary = {
+  id: string;
+  number: number;
+  isEnabled: boolean;
+};
+
 export function PosTerminal() {
   const { currentOrg, isLoading: isOrgLoading } = useOrganization();
   const currentOrgId = currentOrg?.id ?? null;
@@ -67,6 +84,12 @@ export function PosTerminal() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderNotes, setOrderNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showMobileCart, setShowMobileCart] = useState(false);
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [tables, setTables] = useState<TableSummary[]>([]);
+  const [tablesError, setTablesError] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [isTableDialogOpen, setIsTableDialogOpen] = useState(false);
 
   const loadCatalog = useCallback(async () => {
     if (!currentOrgId) {
@@ -129,11 +152,56 @@ export function PosTerminal() {
     }
   }, [currentOrgId]);
 
-  useEffect(() => {
-    if (currentOrgId) {
-      loadCatalog();
+  const loadTables = useCallback(async () => {
+    if (!currentOrgId) {
+      return;
     }
-  }, [currentOrgId, loadCatalog]);
+
+    setTablesLoading(true);
+    setTablesError(null);
+
+    try {
+      const response = await fetch(`/api/organizations/${currentOrgId}/tables`);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(
+          data?.error || "No pudimos cargar las mesas del restaurante"
+        );
+      }
+
+      const data = (await response.json()) as {
+        tables: Array<{ id: string; number: number; isEnabled: boolean }>;
+      };
+
+      const enabledTables = (data.tables ?? []).filter((table) => table.isEnabled);
+      setTables(enabledTables);
+      setSelectedTableId((prev) =>
+        prev && enabledTables.some((table) => table.id === prev) ? prev : null
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Error inesperado al cargar las mesas";
+      console.error("Error loading tables:", error);
+      setTablesError(message);
+      toast.error(message);
+    } finally {
+      setTablesLoading(false);
+    }
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (!currentOrgId) {
+      setTables([]);
+      setSelectedTableId(null);
+      return;
+    }
+
+    loadCatalog();
+    loadTables();
+  }, [currentOrgId, loadCatalog, loadTables]);
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -147,6 +215,11 @@ export function PosTerminal() {
       return matchesCategory && matchesTerm;
     });
   }, [menuItems, search, selectedCategory]);
+
+  const selectedTable = useMemo(
+    () => tables.find((table) => table.id === selectedTableId) ?? null,
+    [selectedTableId, tables]
+  );
 
   const cartCount = useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
@@ -192,10 +265,6 @@ export function PosTerminal() {
     );
   }, []);
 
-  const removeFromCart = useCallback((itemId: string) => {
-    setCart((prev) => prev.filter((entry) => entry.id !== itemId));
-  }, []);
-
   const clearCart = useCallback(() => {
     setCart([]);
     setOrderNotes("");
@@ -215,19 +284,23 @@ export function PosTerminal() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`/api/organizations/${currentOrgId}/orders`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items: cart.map((entry) => ({
-            menuItemId: entry.id,
-            quantity: entry.quantity,
-          })),
-          notes: orderNotes.trim() || undefined,
-        }),
-      });
+      const response = await fetch(
+        `/api/organizations/${currentOrgId}/orders`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            items: cart.map((entry) => ({
+              menuItemId: entry.id,
+              quantity: entry.quantity,
+            })),
+            notes: orderNotes.trim() || undefined,
+            tableId: selectedTableId || undefined,
+          }),
+        }
+      );
 
       const data = await response.json().catch(() => null);
 
@@ -254,7 +327,7 @@ export function PosTerminal() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [cart, clearCart, currentOrgId, loadCatalog, orderNotes]);
+  }, [cart, clearCart, currentOrgId, loadCatalog, orderNotes, selectedTableId]);
 
   if (isOrgLoading) {
     return (
@@ -286,231 +359,538 @@ export function PosTerminal() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-      <Card className="flex flex-col">
-        <CardHeader className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Punto de venta</CardTitle>
-              <CardDescription>
-                {catalogLoading
-                  ? "Cargando menu activo..."
-                  : catalogError
-                    ? catalogError
-                    : `Gestiona pedidos para ${currentOrg.name}`}
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadCatalog}
-              disabled={catalogLoading}
-              className="gap-2"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              Refrescar
-            </Button>
-          </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <Input
-              placeholder="Buscar por nombre o categoria"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="md:max-w-sm"
-              disabled={catalogLoading}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Badge
-                variant={selectedCategory === "all" ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => setSelectedCategory("all")}
+    <>
+      <Dialog open={isTableDialogOpen} onOpenChange={setIsTableDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Asignar mesa al pedido</DialogTitle>
+            <DialogDescription>
+              Selecciona una mesa disponible para vincular este pedido POS.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {tablesLoading ? (
+              <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Cargando mesas...
+              </div>
+            ) : tables.length === 0 ? (
+              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                No hay mesas habilitadas. Activa una mesa desde la sección Mesas antes de continuar.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {tables.map((table) => {
+                  const isSelected = table.id === selectedTableId;
+                  return (
+                    <Button
+                      key={table.id}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      className="justify-start"
+                      onClick={() => {
+                        setSelectedTableId(table.id);
+                        setIsTableDialogOpen(false);
+                      }}
+                    >
+                      <UtensilsCrossed className="mr-2 h-4 w-4" />
+                      Mesa {table.number}
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
+            {selectedTableId ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-center text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={() => {
+                  setSelectedTableId(null);
+                  setIsTableDialogOpen(false);
+                }}
               >
-                Todo
-              </Badge>
-              {categories.map((category) => (
-                <Badge
-                  key={category.id}
-                  variant={
-                    selectedCategory === category.id ? "default" : "outline"
-                  }
-                  className="cursor-pointer"
-                  onClick={() => setSelectedCategory(category.id)}
-                >
-                  {category.name}
-                </Badge>
-              ))}
-            </div>
+                Quitar asignacion
+              </Button>
+            ) : null}
           </div>
-        </CardHeader>
-        <Separator />
-        <CardContent className="flex-1 overflow-hidden p-0">
-          <ScrollArea className="h-[600px]">
-            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-              {catalogLoading ? (
-                <div className="col-span-full text-center text-sm text-muted-foreground">
-                  Cargando menu...
-                </div>
-              ) : filteredItems.length === 0 ? (
-                <div className="col-span-full text-center text-sm text-muted-foreground">
-                  No hay productos que coincidan con la busqueda.
-                </div>
-              ) : (
-                filteredItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleAddToCart(item)}
-                    className="flex flex-col items-start gap-2 rounded-lg border bg-card p-4 text-left transition hover:border-primary"
-                  >
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <h3 className="text-base font-semibold">{item.name}</h3>
-                      <span className="text-sm font-medium text-primary">
-                        {formatCurrency(item.priceCents)}
-                      </span>
-                    </div>
-                    <p className="line-clamp-2 text-sm text-muted-foreground">
-                      {item.description ?? "Sin descripcion"}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="secondary">{item.category.name}</Badge>
-                      <span className="flex items-center gap-1">
-                        <Plus className="h-3 w-3" />
-                        Agregar
-                      </span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
-      <Card className="flex h-full flex-col">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Pedido actual
-              </CardTitle>
-              <CardDescription>
-                {cartCount} producto{cartCount === 1 ? "" : "s"}
-              </CardDescription>
+      <div className="grid gap-6 lg:grid-cols-[1fr_384px]">
+        <Card className="flex flex-col h-[700px]">
+          <CardHeader className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Punto de venta</CardTitle>
+                <CardDescription>
+                  {catalogLoading
+                    ? "Cargando menu activo..."
+                    : catalogError
+                      ? catalogError
+                      : `Gestiona pedidos para ${currentOrg?.name || "tu restaurante"}`}
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadCatalog}
+                disabled={catalogLoading}
+                className="gap-2"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refrescar
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={clearCart}
-              disabled={cart.length === 0 || isSubmitting}
-            >
-              Vaciar
-            </Button>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <Input
+                placeholder="Buscar por nombre o categoria"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="md:max-w-sm"
+                disabled={catalogLoading}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Badge
+                  variant={selectedCategory === "all" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedCategory("all")}
+                >
+                  Todo
+                </Badge>
+                {categories.map((category) => (
+                  <Badge
+                    key={category.id}
+                    variant={
+                      selectedCategory === category.id ? "default" : "outline"
+                    }
+                    className="cursor-pointer"
+                    onClick={() => setSelectedCategory(category.id)}
+                  >
+                    {category.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <Separator />
+          <CardContent className="flex-1 overflow-hidden p-0">
+            <ScrollArea className="h-[600px]">
+              <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                {catalogLoading ? (
+                  <div className="col-span-full text-center text-sm text-muted-foreground">
+                    Cargando menu...
+                  </div>
+                ) : filteredItems.length === 0 ? (
+                  <div className="col-span-full text-center text-sm text-muted-foreground">
+                    No hay productos que coincidan con la busqueda.
+                  </div>
+                ) : (
+                  filteredItems.map((item) => {
+                    const cartItem = cart.find((c) => c.id === item.id);
+                    const isInCart = cartItem && cartItem.quantity > 0;
+
+                    return (
+                      <Card
+                        key={item.id}
+                        className={`p-4 bg-white hover:bg-gray-50 transition-all duration-200 border-2 ${
+                          isInCart ? "border-gray-600" : "border-gray-200"
+                        }`}
+                      >
+                        <div className="flex gap-4">
+                          <Image
+                            src={item.imageUrl || "/placeholder.svg"}
+                            alt={item.name}
+                            width={80}
+                            height={80}
+                            className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm mb-1 truncate">
+                              {item.name}
+                            </h3>
+                            <p className="text-xs text-gray-500 mb-2 line-clamp-2">
+                              {item.description ?? "Sin descripcion"}
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold">
+                                  {formatCurrency(item.priceCents)}
+                                </span>
+                              </div>
+                              <div className="flex justify-end">
+                                {(() => {
+                                  const cartItem = cart.find(
+                                    (c) => c.id === item.id
+                                  );
+                                  const quantity = cartItem?.quantity || 0;
+
+                                  if (quantity === 0) {
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => handleAddToCart(item)}
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Agregar
+                                      </Button>
+                                    );
+                                  }
+
+                                  return (
+                                    <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 hover:bg-white rounded-full"
+                                        onClick={() =>
+                                          decreaseQuantity(item.id)
+                                        }
+                                      >
+                                        <Minus className="h-3 w-3" />
+                                      </Button>
+                                      <span className="w-8 text-center text-sm font-semibold">
+                                        {quantity}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 hover:bg-white rounded-full"
+                                        onClick={() => handleAddToCart(item)}
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        {/* Desktop Cart */}
+        <div className="hidden lg:flex bg-white border border-gray-200 rounded-lg flex-col h-[700px]">
+          <div className="p-6 border-b">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Pedido POS</h2>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    loadTables();
+                    setIsTableDialogOpen(true);
+                  }}
+                  disabled={isSubmitting}
+                  className="gap-2 border-gray-300 text-gray-600 hover:bg-gray-100"
+                >
+                  {tablesLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UtensilsCrossed className="h-4 w-4" />
+                  )}
+                  {selectedTable
+                    ? `Mesa ${selectedTable.number}`
+                    : "Asignar mesa"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearCart}
+                  disabled={cart.length === 0 || isSubmitting}
+                  className="gap-2 border-gray-300 text-gray-600 hover:bg-gray-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Vaciar
+                </Button>
+              </div>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">
+                Orden #{Math.floor(Math.random() * 100)}
+              </span>
+              <span className="font-semibold">
+                {currentOrg?.name || "Restaurante"}
+              </span>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              {selectedTable
+                ? `Mesa asignada: ${selectedTable.number}`
+                : "Sin mesa asignada"}
+            </div>
+            {tablesError ? (
+              <p className="mt-2 text-xs text-red-500">{tablesError}</p>
+            ) : null}
           </div>
-        </CardHeader>
-        <Separator />
-        <CardContent className="flex flex-1 flex-col gap-4">
-          <ScrollArea className="h-[320px]">
-            <div className="space-y-3">
+
+          <div className="flex-1 overflow-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Items del pedido</h3>
+              <span className="text-sm text-gray-500">{cart.length}</span>
+            </div>
+
+            <div className="space-y-4 mb-6">
               {cart.length === 0 ? (
-                <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                  Todavia no agregaste productos. Toca un item del menu para sumar
-                  al carrito.
+                <p className="rounded-md border border-dashed p-4 text-sm text-gray-500 text-center">
+                  Todavia no agregaste productos. Toca un item del menu para
+                  sumar al carrito.
                 </p>
               ) : (
                 cart.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-md border p-3"
+                    className="flex justify-between items-start"
                   >
-                    <div>
-                      <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(item.priceCents)} x {item.quantity}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => decreaseQuantity(item.id)}
-                        disabled={isSubmitting}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-8 text-center text-sm font-semibold">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          const menuItem = menuItems.find((mi) => mi.id === item.id);
-                          if (menuItem) {
-                            handleAddToCart(menuItem);
-                          }
-                        }}
-                        disabled={isSubmitting}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => removeFromCart(item.id)}
-                        disabled={isSubmitting}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className="font-semibold text-sm">{item.name}</h4>
+                        <span className="font-semibold text-sm ml-2">
+                          {formatCurrency(item.priceCents * item.quantity)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">
+                          {item.quantity}x item
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))
               )}
             </div>
-          </ScrollArea>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="order-notes">
-              Notas del pedido
-            </label>
-            <Textarea
-              id="order-notes"
-              placeholder="Ej: sin sal, entregar en barra, etc."
-              value={orderNotes}
-              onChange={(event) => setOrderNotes(event.target.value)}
-              disabled={isSubmitting}
-              rows={3}
-            />
+            {cart.length > 0 && (
+              <>
+                <div className="border-t pt-4 mb-6">
+                  <h3 className="font-semibold mb-3">Resumen de pago</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Subtotal</span>
+                      <span className="font-semibold">
+                        {formatCurrency(cartTotalC)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t font-bold">
+                      <span>Total a pagar</span>
+                      <span>{formatCurrency(cartTotalC)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-6">
+                  <label
+                    className="text-sm font-semibold"
+                    htmlFor="order-notes"
+                  >
+                    Notas del pedido
+                  </label>
+                  <Textarea
+                    id="order-notes"
+                    placeholder="Ej: sin sal, entregar en barra, etc."
+                    value={orderNotes}
+                    onChange={(event) => setOrderNotes(event.target.value)}
+                    disabled={isSubmitting}
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
-          <Separator />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Subtotal</span>
-              <span>{formatCurrency(cartTotalC)}</span>
+          {cart.length > 0 && (
+            <div className="p-6 border-t">
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 bg-transparent">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimir
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleSubmitOrder}
+                  disabled={isSubmitting}
+                >
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Confirmar pedido
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-sm font-semibold">
-              <span>Total a cobrar</span>
-              <span>{formatCurrency(cartTotalC)}</span>
-            </div>
-          </div>
+          )}
+        </div>
 
+        {/* Mobile Cart Button */}
+        <div className="lg:hidden">
           <Button
+            className="fixed bottom-4 right-4 z-40 rounded-full shadow-lg"
             size="lg"
-            className="mt-auto gap-2"
-            onClick={handleSubmitOrder}
-            disabled={cart.length === 0 || isSubmitting}
+            onClick={() => setShowMobileCart(true)}
           >
-            Confirmar pedido
-            <ArrowRight className="h-4 w-4" />
+            <ShoppingCart className="h-5 w-5 mr-2" />
+            {cartCount > 0 && (
+              <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center ml-1">
+                {cartCount}
+              </span>
+            )}
           </Button>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+
+        {/* Mobile Cart Modal */}
+        {showMobileCart && (
+          <div
+            className="lg:hidden fixed inset-0 z-50 bg-black/50"
+            onClick={() => setShowMobileCart(false)}
+          >
+            <div
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85vh] overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
+
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold">Pedido POS</h2>
+                  <span className="text-sm text-gray-500">
+                    Orden #{Math.floor(Math.random() * 100)}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                  <span className="text-sm text-gray-500">
+                    {selectedTable
+                      ? `Mesa asignada: ${selectedTable.number}`
+                      : "Sin mesa asignada"}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      loadTables();
+                      setIsTableDialogOpen(true);
+                    }}
+                    disabled={isSubmitting}
+                    className="gap-2 border-gray-300 text-gray-600 hover:bg-gray-100 bg-transparent"
+                  >
+                    {tablesLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UtensilsCrossed className="h-4 w-4" />
+                    )}
+                    {selectedTable ? "Cambiar mesa" : "Asignar mesa"}
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-semibold">Items del pedido</h3>
+                  <span className="text-sm text-gray-500">{cart.length}</span>
+                </div>
+
+                {tablesError ? (
+                  <p className="mb-4 text-xs text-red-500">{tablesError}</p>
+                ) : null}
+
+                <div className="space-y-4 mb-6">
+                  {cart.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">
+                      No hay productos en el carrito
+                    </p>
+                  ) : (
+                    cart.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex justify-between items-start"
+                      >
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start mb-1">
+                            <h4 className="font-semibold text-sm">
+                              {item.name}
+                            </h4>
+                            <span className="font-semibold text-sm ml-2">
+                              {formatCurrency(item.priceCents * item.quantity)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-500">
+                              {item.quantity}x item
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {cart.length > 0 && (
+                  <>
+                    <div className="border-t pt-4 mb-6">
+                      <h3 className="font-semibold mb-3">Resumen de pago</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Subtotal</span>
+                          <span className="font-semibold">
+                            {formatCurrency(cartTotalC)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t font-bold">
+                          <span>Total a pagar</span>
+                          <span>{formatCurrency(cartTotalC)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-6">
+                      <label
+                        className="text-sm font-semibold"
+                        htmlFor="mobile-order-notes"
+                      >
+                        Notas del pedido
+                      </label>
+                      <Textarea
+                        id="mobile-order-notes"
+                        placeholder="Ej: sin sal, entregar en barra, etc."
+                        value={orderNotes}
+                        onChange={(event) => setOrderNotes(event.target.value)}
+                        disabled={isSubmitting}
+                        rows={3}
+                        className="text-sm"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 bg-transparent"
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        Imprimir
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          handleSubmitOrder();
+                          setShowMobileCart(false);
+                        }}
+                        disabled={isSubmitting}
+                      >
+                        <Wallet className="h-4 w-4 mr-2" />
+                        Confirmar
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
-
-

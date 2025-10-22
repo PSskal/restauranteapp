@@ -15,14 +15,16 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2,
   ChefHat,
-  MapPin,
   Phone,
   Utensils,
   Minus,
   Plus,
   Trash2,
   CheckCircle2,
-  AlertCircle,
+  ShoppingCart,
+  Printer,
+  Clock,
+  RefreshCw,
 } from "lucide-react";
 import { MenuDisplay, PublicMenuItem } from "@/components/menu/menu-display";
 
@@ -50,11 +52,22 @@ interface CreatedOrderSummary {
   status: string;
 }
 
+interface OrderFromAPI {
+  id: string;
+  number: number;
+  total: number;
+  status: string;
+}
+
 const formatPrice = (cents: number) => (cents / 100).toFixed(2);
 
 export default function TablePage() {
   const params = useParams();
   const token = params.token as string;
+
+  const [showMobileCart, setShowMobileCart] = useState(false);
+  const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
+  const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]);
 
   const [table, setTable] = useState<Table | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +76,6 @@ export default function TablePage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderNotes, setOrderNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastOrder, setLastOrder] = useState<CreatedOrderSummary | null>(null);
 
   useEffect(() => {
@@ -99,53 +111,87 @@ export default function TablePage() {
     }
   }, [token]);
 
-  // Recover last order on mount (in case user refreshes page)
+  // Recover last order from localStorage (device-specific)
   useEffect(() => {
-    const recover = async () => {
-      if (!token) return;
-      try {
-        const response = await fetch(`/api/table/${token}/orders?limit=1`, {
-          cache: "no-store",
-        });
-        if (!response.ok) return; // Silently ignore
-        const data = await response.json();
-        if (data.orders && data.orders.length > 0) {
-          const o = data.orders[0];
-          setLastOrder({
-            id: o.id,
-            number: o.number,
-            total: o.total,
-            status: o.status,
-          });
+    if (!token) return;
+
+    try {
+      const savedOrder = localStorage.getItem(`lastOrder_${token}`);
+      if (savedOrder) {
+        const orderData = JSON.parse(savedOrder);
+        setLastOrder(orderData);
+
+        // También recuperar los items del último pedido si existen
+        const savedItems = localStorage.getItem(`lastOrderItems_${token}`);
+        if (savedItems) {
+          setLastOrderItems(JSON.parse(savedItems));
         }
-      } catch {
-        // ignore network errors silently
       }
-    };
-    recover();
+    } catch (error) {
+      console.error("Error loading saved order:", error);
+      // Limpiar localStorage si hay datos corruptos
+      localStorage.removeItem(`lastOrder_${token}`);
+      localStorage.removeItem(`lastOrderItems_${token}`);
+    }
   }, [token]);
 
   // Poll order status if lastOrder exists and not final (SERVED/CANCELLED)
   useEffect(() => {
     if (!lastOrder) return;
     if (["SERVED", "CANCELLED"].includes(lastOrder.status)) return;
+
     const interval = setInterval(async () => {
       try {
-        const resp = await fetch(`/api/table/${token}/orders?limit=1`, {
+        // Usar el endpoint existente y filtrar por ID del pedido guardado
+        const resp = await fetch(`/api/table/${token}/orders?limit=10`, {
           cache: "no-store",
         });
         if (!resp.ok) return;
         const data = await resp.json();
+
         if (data.orders && data.orders.length > 0) {
-          const o = data.orders[0];
-          if (o.id === lastOrder.id) {
-            setLastOrder((prev) =>
-              prev ? { ...prev, status: o.status } : prev
-            );
+          // Buscar nuestro pedido específico por ID
+          const currentOrder = data.orders.find(
+            (o: OrderFromAPI) => o.id === lastOrder.id
+          );
+          if (currentOrder && currentOrder.status !== lastOrder.status) {
+            const updatedOrder = { ...lastOrder, status: currentOrder.status };
+            setLastOrder(updatedOrder);
+
+            // Actualizar localStorage con el nuevo estado
+            try {
+              localStorage.setItem(
+                `lastOrder_${token}`,
+                JSON.stringify(updatedOrder)
+              );
+
+              // Si el pedido llega a estado final, limpiarlo después de 1 hora
+              if (["SERVED", "CANCELLED"].includes(currentOrder.status)) {
+                setTimeout(
+                  () => {
+                    try {
+                      localStorage.removeItem(`lastOrder_${token}`);
+                      localStorage.removeItem(`lastOrderItems_${token}`);
+                    } catch (error) {
+                      console.error(
+                        "Error clearing order from localStorage:",
+                        error
+                      );
+                    }
+                  },
+                  60 * 60 * 1000
+                ); // 1 hora
+              }
+            } catch (error) {
+              console.error("Error updating order in localStorage:", error);
+            }
           }
         }
-      } catch {}
+      } catch (error) {
+        console.error("Error polling order status:", error);
+      }
     }, 15000);
+
     return () => clearInterval(interval);
   }, [lastOrder, token]);
 
@@ -186,8 +232,6 @@ export default function TablePage() {
         },
       ];
     });
-
-    setSubmitError(null);
   };
 
   const updateQuantity = (menuItemId: string, delta: number) => {
@@ -213,13 +257,64 @@ export default function TablePage() {
     setOrderNotes("");
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "PLACED":
+        return <Clock className="h-5 w-5 text-blue-500" />;
+      case "PREPARING":
+        return <Clock className="h-5 w-5 text-yellow-500" />;
+      case "READY":
+        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+      case "SERVED":
+        return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+      default:
+        return <Clock className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "PLACED":
+        return "bg-blue-100 text-blue-800";
+      case "PREPARING":
+        return "bg-yellow-100 text-yellow-800";
+      case "READY":
+        return "bg-green-100 text-green-800";
+      case "SERVED":
+        return "bg-green-200 text-green-900";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "PLACED":
+        return "Pedido recibido";
+      case "PREPARING":
+        return "Preparando";
+      case "READY":
+        return "Listo para servir";
+      case "SERVED":
+        return "Servido";
+      default:
+        return status;
+    }
+  };
+
+  const handleOrderAgain = () => {
+    if (lastOrderItems.length > 0) {
+      setCart(lastOrderItems);
+      setShowMobileCart(true);
+    }
+  };
+
   const handleSubmitOrder = async () => {
     if (!table || cart.length === 0) {
       return;
     }
 
     setIsSubmitting(true);
-    setSubmitError(null);
     setLastOrder(null);
 
     try {
@@ -245,20 +340,38 @@ export default function TablePage() {
       }
 
       const data = await response.json();
-      setLastOrder({
+
+      // Guardar los items del pedido para la función "ordenar de nuevo"
+      const orderItems = [...cart];
+      setLastOrderItems(orderItems);
+
+      const orderData = {
         id: data.order.id,
         number: data.order.number,
         total: data.order.total,
         status: data.order.status,
-      });
+      };
+
+      setLastOrder(orderData);
+
+      // Guardar en localStorage para este dispositivo específicamente
+      try {
+        localStorage.setItem(`lastOrder_${token}`, JSON.stringify(orderData));
+        localStorage.setItem(
+          `lastOrderItems_${token}`,
+          JSON.stringify(orderItems)
+        );
+      } catch (error) {
+        console.error("Error saving order to localStorage:", error);
+      }
+
+      // Mostrar modal de confirmación
+      setShowOrderConfirmation(true);
+
       resetCart();
     } catch (submitError) {
       console.error("Error creating order:", submitError);
-      setSubmitError(
-        submitError instanceof Error
-          ? submitError.message
-          : "No pudimos enviar tu pedido. Intenta mas tarde."
-      );
+      // Podrías mostrar un toast aquí en lugar de usar el estado
     } finally {
       setIsSubmitting(false);
     }
@@ -296,216 +409,276 @@ export default function TablePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
-      <div className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {table.organization.name}
-            </h1>
-            <p className="text-gray-600">
-              Bienvenido, arma tu pedido desde la Mesa {table.number}
-            </p>
-            <Badge variant="outline">Mesa {table.number}</Badge>
+    <div className="min-h-screen bg-slate-50 pb-28 lg:pb-12">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6 lg:py-10">
+        <div className="space-y-6">
+          <Card className="border bg-white shadow-sm">
+            <CardContent className="flex flex-col gap-5 pt-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-2">
+                  <Badge variant="outline" className="w-fit">
+                    Mesa {table.number}
+                  </Badge>
+                  <h1 className="text-2xl font-semibold text-gray-900 lg:text-3xl">
+                    {table.organization.name}
+                  </h1>
+                  <p className="text-sm text-gray-600 lg:text-base">
+                    Elige tus platos favoritos y envía el pedido directo a
+                    cocina.
+                  </p>
+                </div>
+                <div className="hidden h-14 w-14 items-center justify-center rounded-full bg-orange-100 sm:flex">
+                  <ChefHat className="h-7 w-7 text-orange-600" />
+                </div>
+              </div>
+              <div className="grid gap-3 text-sm text-gray-600 sm:grid-cols-3">
+                <div className="flex items-center gap-2 rounded-md border border-dashed border-orange-200 bg-orange-50 px-3 py-2 text-orange-700">
+                  <Utensils className="h-4 w-4" />
+                  Pedido directo a cocina
+                </div>
+
+                <div className="flex items-center gap-2 rounded-md border bg-white px-3 py-2 shadow-sm">
+                  <Phone className="h-4 w-4 text-gray-500" />
+                  ¿Ayuda? llama al personal
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="space-y-4">
+            {lastOrder ? (
+              <Card
+                className={`border-2 shadow-sm ${
+                  lastOrder.status === "SERVED"
+                    ? "border-green-200 bg-green-50"
+                    : lastOrder.status === "READY"
+                      ? "border-green-200 bg-green-50"
+                      : lastOrder.status === "PREPARING"
+                        ? "border-yellow-200 bg-yellow-50"
+                        : "border-blue-200 bg-blue-50"
+                }`}
+              >
+                <CardHeader className="flex flex-row items-start gap-3">
+                  <div className="mt-1">{getStatusIcon(lastOrder.status)}</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CardTitle className="text-lg">
+                        Pedido #{lastOrder.number}
+                      </CardTitle>
+                      <Badge className={getStatusColor(lastOrder.status)}>
+                        {getStatusText(lastOrder.status)}
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-sm">
+                      Total: {""}
+                      <span className="font-semibold">
+                        ${lastOrder.total.toFixed(2)}
+                      </span>
+                    </CardDescription>
+                    {lastOrder.status === "SERVED" && (
+                      <Button
+                        onClick={handleOrderAgain}
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 bg-white hover:bg-green-50"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Pedir de nuevo
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+              </Card>
+            ) : null}
+          </div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-6">
+              <MenuDisplay
+                orgId={table.organization.id}
+                tableToken={table.qrToken}
+                onAddItem={handleAddToCart}
+                onUpdateQuantity={updateQuantity}
+                cartItems={cart}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto space-y-6">
-          <Card className="border-orange-200">
-            <CardHeader className="text-center">
-              <div className="mx-auto w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
-                <ChefHat className="h-8 w-8 text-orange-600" />
-              </div>
-              <CardTitle className="text-xl">
-                Bienvenido a {table.organization.name}!
-              </CardTitle>
-              <CardDescription>
-                Puedes explorar el menu, agregar platos a tu carrito y enviar el
-                pedido directamente a cocina.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+      {cart.length > 0 ? (
+        <>
+          <div className="lg:hidden fixed bottom-4 right-4 z-40">
+            <Button
+              className="rounded-full shadow-lg bg-orange-500 text-white px-4 py-3 flex items-center gap-3"
+              size="lg"
+              onClick={() => setShowMobileCart(true)}
+            >
+              <ShoppingCart className="h-5 w-5" />
+              <span className="text-sm font-medium">{cartItemsCount}</span>
+            </Button>
+          </div>
 
-          {lastOrder ? (
-            <Card className="border-green-200 bg-green-50">
-              <CardHeader className="flex flex-row items-start gap-3">
-                <div className="mt-1">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg text-green-700">
-                    Pedido #{lastOrder.number}
-                  </CardTitle>
-                  <CardDescription className="text-green-700">
-                    Total ${lastOrder.total.toFixed(2)} • Estado:{" "}
-                    {lastOrder.status}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-            </Card>
-          ) : null}
+          {showMobileCart && (
+            <div
+              className="lg:hidden fixed inset-0 z-50 bg-black/50"
+              onClick={() => setShowMobileCart(false)}
+            >
+              <div
+                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85vh] overflow-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6">
+                  <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
 
-          <MenuDisplay
-            orgId={table.organization.id}
-            tableToken={table.qrToken}
-            onAddItem={handleAddToCart}
-          />
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold">Tu pedido</h2>
+                    <span className="text-sm text-gray-500">
+                      Total: ${formatPrice(cartTotalCents)}
+                    </span>
+                  </div>
 
-          <Card className="border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>Tu carrito</span>
-                <Badge variant="secondary">{cartItemsCount} items</Badge>
-              </CardTitle>
-              <CardDescription>
-                Revisa tu seleccion antes de enviar el pedido.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {cart.length === 0 ? (
-                <div className="text-center text-gray-500">
-                  Agrega productos desde el menu para comenzar.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {cart.map((item) => (
-                    <div
-                      key={item.menuItemId}
-                      className="flex flex-col gap-3 rounded-lg border p-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {item.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Precio unitario ${formatPrice(item.priceCents)}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeItem(item.menuItemId)}
-                          className="text-gray-500 hover:text-red-600"
+                  <div className="space-y-4 mb-6">
+                    {cart.length === 0 ? (
+                      <p className="text-center text-gray-500 py-8">
+                        No hay productos en el carrito
+                      </p>
+                    ) : (
+                      cart.map((item) => (
+                        <div
+                          key={item.menuItemId}
+                          className="flex justify-between items-start"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => updateQuantity(item.menuItemId, -1)}
-                            disabled={item.quantity === 1}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <span className="w-8 text-center font-medium">
-                            {item.quantity}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => updateQuantity(item.menuItemId, 1)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="font-semibold text-sm">
+                                {item.name}
+                              </h4>
+                              <span className="font-semibold text-sm ml-2">
+                                ${formatPrice(item.priceCents * item.quantity)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() =>
+                                  updateQuantity(item.menuItemId, -1)
+                                }
+                                disabled={item.quantity <= 1}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <span className="w-8 text-center">
+                                {item.quantity}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() =>
+                                  updateQuantity(item.menuItemId, 1)
+                                }
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeItem(item.menuItemId)}
+                                className="ml-2 text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">Subtotal</p>
-                          <p className="text-base font-semibold text-gray-900">
-                            ${formatPrice(item.priceCents * item.quantity)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      ))
+                    )}
+                  </div>
 
-              <div className="space-y-2">
-                <label
-                  className="text-sm font-medium text-gray-700"
-                  htmlFor="order-notes"
-                >
-                  Notas para tu pedido (opcional)
-                </label>
-                <Textarea
-                  id="order-notes"
-                  placeholder="Ejemplo: sin picante, traer platos adicionales"
-                  value={orderNotes}
-                  onChange={(event) => setOrderNotes(event.target.value)}
-                  rows={3}
-                />
-              </div>
+                  <div className="border-t pt-4 mb-4">
+                    <label
+                      className="text-sm font-medium"
+                      htmlFor="mobile-order-notes"
+                    >
+                      Notas del pedido
+                    </label>
+                    <Textarea
+                      id="mobile-order-notes"
+                      placeholder="Ej: sin sal, entregar en barra"
+                      value={orderNotes}
+                      onChange={(e) => setOrderNotes(e.target.value)}
+                      rows={3}
+                      className="mt-2"
+                    />
+                  </div>
 
-              {submitError ? (
-                <div className="flex items-center gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{submitError}</span>
-                </div>
-              ) : null}
-
-              <div className="flex items-center justify-between border-t pt-4">
-                <div>
-                  <p className="text-sm text-gray-500">Total</p>
-                  <p className="text-xl font-semibold text-gray-900">
-                    ${formatPrice(cartTotalCents)}
-                  </p>
-                </div>
-                <Button
-                  className="bg-orange-500 hover:bg-orange-600"
-                  size="lg"
-                  disabled={cart.length === 0 || isSubmitting}
-                  onClick={handleSubmitOrder}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Enviando pedido
-                    </>
-                  ) : (
-                    <>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1 bg-transparent"
+                      onClick={() => {
+                        /* imprimir si se desea */
+                      }}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Imprimir
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() => {
+                        handleSubmitOrder();
+                        setShowMobileCart(false);
+                      }}
+                      disabled={isSubmitting}
+                    >
                       <Utensils className="h-4 w-4 mr-2" />
-                      Enviar pedido
-                    </>
-                  )}
-                </Button>
+                      Confirmar
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
+        </>
+      ) : null}
 
-          <Card className="bg-gray-50">
-            <CardHeader>
-              <CardTitle className="text-lg">Informacion</CardTitle>
+      {/* Modal de confirmación de pedido */}
+      {showOrderConfirmation && lastOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md mx-auto bg-white">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
+              </div>
+              <CardTitle className="text-xl text-green-600">
+                ¡Pedido confirmado!
+              </CardTitle>
+              <CardDescription>
+                Tu pedido #{lastOrder.number} ha sido enviado a cocina
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center space-x-3">
-                <MapPin className="h-4 w-4 text-gray-500" />
-                <span className="text-sm text-gray-700">
-                  Mesa {table.number}
-                </span>
+            <CardContent className="text-center space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">Estado actual</p>
+                <div className="flex items-center justify-center gap-2">
+                  {getStatusIcon(lastOrder.status)}
+                  <Badge className={getStatusColor(lastOrder.status)}>
+                    {getStatusText(lastOrder.status)}
+                  </Badge>
+                </div>
               </div>
-
-              <div className="flex items-center space-x-3">
-                <Phone className="h-4 w-4 text-gray-500" />
-                <span className="text-sm text-gray-700">
-                  Si necesitas ayuda, llama al personal de sala
-                </span>
-              </div>
-
-              <div className="pt-3 border-t">
-                <p className="text-xs text-gray-500">
-                  Token de mesa: {table.qrToken}
-                </p>
-              </div>
+              <p className="text-sm text-gray-600">
+                Te notificaremos cuando tu pedido esté listo
+              </p>
+              <Button
+                onClick={() => setShowOrderConfirmation(false)}
+                className="w-full"
+              >
+                Entendido
+              </Button>
             </CardContent>
           </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 }

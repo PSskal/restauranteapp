@@ -1,31 +1,8 @@
-/*
-  Warnings:
-
-  - You are about to drop the column `price` on the `MenuItem` table. All the data in the column will be lost.
-  - You are about to drop the column `restaurantId` on the `MenuItem` table. All the data in the column will be lost.
-  - You are about to drop the column `restaurantId` on the `Order` table. All the data in the column will be lost.
-  - You are about to drop the column `total` on the `Order` table. All the data in the column will be lost.
-  - The `status` column on the `Order` table would be dropped and recreated. This will lead to data loss if there is data in the column.
-  - You are about to drop the column `restaurantId` on the `Table` table. All the data in the column will be lost.
-  - You are about to drop the column `seats` on the `Table` table. All the data in the column will be lost.
-  - You are about to drop the column `password` on the `User` table. All the data in the column will be lost.
-  - You are about to drop the column `role` on the `User` table. All the data in the column will be lost.
-  - You are about to drop the `Restaurant` table. If the table is not empty, all the data it contains will be lost.
-  - A unique constraint covering the columns `[orgId,number]` on the table `Order` will be added. If there are existing duplicate values, this will fail.
-  - A unique constraint covering the columns `[orgId,number]` on the table `Table` will be added. If there are existing duplicate values, this will fail.
-  - Added the required column `categoryId` to the `MenuItem` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `orgId` to the `MenuItem` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `priceCents` to the `MenuItem` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `updatedAt` to the `MenuItem` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `number` to the `Order` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `orgId` to the `Order` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `updatedAt` to the `Order` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `orgId` to the `Table` table without a default value. This is not possible if the table is not empty.
-  - The required column `qrToken` was added to the `Table` table with a prisma-level default value. This is not possible if the table is not empty. Please add this column as optional, then populate it before making it required.
-
-*/
 -- CreateEnum
-CREATE TYPE "public"."OrderStatus" AS ENUM ('DRAFT', 'PLACED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED');
+CREATE TYPE "public"."Role" AS ENUM ('OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN');
+
+-- CreateEnum
+CREATE TYPE "public"."OrderStatus" AS ENUM ('DRAFT', 'PLACED', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED');
 
 -- CreateEnum
 CREATE TYPE "public"."PaymentMethod" AS ENUM ('CASH', 'CARD');
@@ -33,66 +10,17 @@ CREATE TYPE "public"."PaymentMethod" AS ENUM ('CASH', 'CARD');
 -- CreateEnum
 CREATE TYPE "public"."PaymentStatus" AS ENUM ('PENDING', 'PAID');
 
--- AlterEnum
-ALTER TYPE "public"."Role" ADD VALUE 'CASHIER';
+-- CreateTable
+CREATE TABLE "public"."User" (
+    "id" TEXT NOT NULL,
+    "name" TEXT,
+    "email" TEXT,
+    "emailVerified" TIMESTAMP(3),
+    "image" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
--- DropForeignKey
-ALTER TABLE "public"."MenuItem" DROP CONSTRAINT "MenuItem_restaurantId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Order" DROP CONSTRAINT "Order_restaurantId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Order" DROP CONSTRAINT "Order_tableId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Restaurant" DROP CONSTRAINT "Restaurant_ownerId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Table" DROP CONSTRAINT "Table_restaurantId_fkey";
-
--- AlterTable
-ALTER TABLE "public"."MenuItem" DROP COLUMN "price",
-DROP COLUMN "restaurantId",
-ADD COLUMN     "active" BOOLEAN NOT NULL DEFAULT true,
-ADD COLUMN     "categoryId" TEXT NOT NULL,
-ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "description" TEXT,
-ADD COLUMN     "imageUrl" TEXT,
-ADD COLUMN     "orgId" TEXT NOT NULL,
-ADD COLUMN     "priceCents" INTEGER NOT NULL,
-ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL;
-
--- AlterTable
-ALTER TABLE "public"."Order" DROP COLUMN "restaurantId",
-DROP COLUMN "total",
-ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "createdById" TEXT,
-ADD COLUMN     "notes" TEXT,
-ADD COLUMN     "number" INTEGER NOT NULL,
-ADD COLUMN     "orgId" TEXT NOT NULL,
-ADD COLUMN     "totalC" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL,
-ALTER COLUMN "tableId" DROP NOT NULL,
-DROP COLUMN "status",
-ADD COLUMN     "status" "public"."OrderStatus" NOT NULL DEFAULT 'DRAFT';
-
--- AlterTable
-ALTER TABLE "public"."Table" DROP COLUMN "restaurantId",
-DROP COLUMN "seats",
-ADD COLUMN     "orgId" TEXT NOT NULL,
-ADD COLUMN     "qrToken" TEXT NOT NULL;
-
--- AlterTable
-ALTER TABLE "public"."User" DROP COLUMN "password",
-DROP COLUMN "role",
-ADD COLUMN     "emailVerified" TIMESTAMP(3),
-ADD COLUMN     "image" TEXT,
-ADD COLUMN     "name" TEXT,
-ALTER COLUMN "email" DROP NOT NULL;
-
--- DropTable
-DROP TABLE "public"."Restaurant";
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "public"."Account" (
@@ -165,6 +93,17 @@ CREATE TABLE "public"."Invitation" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."Table" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "number" INTEGER NOT NULL,
+    "qrToken" TEXT NOT NULL,
+    "isEnabled" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "Table_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "public"."MenuCategory" (
     "id" TEXT NOT NULL,
     "orgId" TEXT NOT NULL,
@@ -174,6 +113,38 @@ CREATE TABLE "public"."MenuCategory" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "MenuCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."MenuItem" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "priceCents" INTEGER NOT NULL,
+    "imageUrl" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MenuItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."Order" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "tableId" TEXT,
+    "number" INTEGER NOT NULL,
+    "status" "public"."OrderStatus" NOT NULL DEFAULT 'DRAFT',
+    "notes" TEXT,
+    "totalC" INTEGER NOT NULL DEFAULT 0,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Order_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -203,6 +174,9 @@ CREATE TABLE "public"."Payment" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "public"."Account"("provider", "providerAccountId");
 
 -- CreateIndex
@@ -224,10 +198,10 @@ CREATE UNIQUE INDEX "Membership_userId_orgId_key" ON "public"."Membership"("user
 CREATE UNIQUE INDEX "Invitation_token_key" ON "public"."Invitation"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MenuCategory_orgId_name_key" ON "public"."MenuCategory"("orgId", "name");
+CREATE UNIQUE INDEX "Table_orgId_number_key" ON "public"."Table"("orgId", "number");
 
 -- CreateIndex
-CREATE INDEX "OrderItem_orderId_idx" ON "public"."OrderItem"("orderId");
+CREATE UNIQUE INDEX "MenuCategory_orgId_name_key" ON "public"."MenuCategory"("orgId", "name");
 
 -- CreateIndex
 CREATE INDEX "MenuItem_orgId_active_idx" ON "public"."MenuItem"("orgId", "active");
@@ -239,7 +213,7 @@ CREATE INDEX "Order_orgId_status_idx" ON "public"."Order"("orgId", "status");
 CREATE UNIQUE INDEX "Order_orgId_number_key" ON "public"."Order"("orgId", "number");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Table_orgId_number_key" ON "public"."Table"("orgId", "number");
+CREATE INDEX "OrderItem_orderId_idx" ON "public"."OrderItem"("orderId");
 
 -- AddForeignKey
 ALTER TABLE "public"."Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -134,6 +134,7 @@ export async function POST(
         orgId: orgId,
         number: number,
         // qrToken se genera automáticamente con el default en el schema
+        isEnabled: false,
       },
     });
 
@@ -153,6 +154,89 @@ export async function POST(
       );
     }
 
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ orgId: string }> }
+) {
+  try {
+    const { orgId } = await params;
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => null);
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    }
+
+    const { tableId, isEnabled } = body as {
+      tableId?: string;
+      isEnabled?: unknown;
+    };
+
+    if (!tableId || typeof isEnabled !== "boolean") {
+      return NextResponse.json(
+        { error: "Datos inválidos para actualizar la mesa" },
+        { status: 400 }
+      );
+    }
+
+    const membership = await prisma.organization.findFirst({
+      where: {
+        id: orgId,
+        OR: [
+          { ownerId: session.user.id },
+          {
+            memberships: {
+              some: {
+                userId: session.user.id,
+                role: { in: ["OWNER", "MANAGER"] },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: "No tienes permisos para modificar mesas" },
+        { status: 403 }
+      );
+    }
+
+    const table = await prisma.table.findFirst({
+      where: { id: tableId, orgId },
+    });
+
+    if (!table) {
+      return NextResponse.json(
+        { error: "La mesa indicada no existe" },
+        { status: 404 }
+      );
+    }
+
+    const updated = await prisma.table.update({
+      where: { id: tableId },
+      data: { isEnabled },
+    });
+
+    return NextResponse.json({
+      table: updated,
+      success: true,
+    });
+  } catch (error) {
+    console.error("Error updating table:", error);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

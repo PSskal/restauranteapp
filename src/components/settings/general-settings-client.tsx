@@ -17,22 +17,48 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export function GeneralSettingsClient() {
-  const { currentOrg } = useOrganization();
+  const { currentOrg, refreshOrganizations } = useOrganization();
   const [restaurantName, setRestaurantName] = useState(currentOrg?.name || "");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSaveRestaurantName = async () => {
     if (!currentOrg) return;
 
+    if (!restaurantName.trim()) {
+      toast.error("El nombre del restaurante no puede estar vacío");
+      return;
+    }
+
+    if (restaurantName.length > 32) {
+      toast.error("El nombre no puede tener más de 32 caracteres");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // TODO: Implementar API call para actualizar el nombre
-      console.log("Updating restaurant name:", restaurantName);
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulated API call
+      const response = await fetch(`/api/organizations/${currentOrg.id}/name`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: restaurantName }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Error al actualizar el nombre");
+      }
+
+      await refreshOrganizations();
+      toast.success("Nombre del restaurante actualizado exitosamente");
     } catch (error) {
       console.error("Error updating restaurant name:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Error al actualizar el nombre"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +83,9 @@ export function GeneralSettingsClient() {
       <Card className="border-primary/30 bg-primary/5">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle>Plan actual: {PLAN_CARDS[currentOrg.plan].name}</CardTitle>
+            <CardTitle>
+              Plan actual: {PLAN_CARDS[currentOrg.plan].name}
+            </CardTitle>
             <CardDescription>
               {PLAN_CARDS[currentOrg.plan].description}
             </CardDescription>
@@ -145,18 +173,6 @@ export function GeneralSettingsClient() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-base font-medium">Modo Oscuro</Label>
-              <p className="text-sm text-gray-500">
-                Alterna entre tema claro y oscuro
-              </p>
-            </div>
-            <Switch />
-          </div>
-
-          <Separator />
-
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-base font-medium">

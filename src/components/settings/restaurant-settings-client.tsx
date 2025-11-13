@@ -94,7 +94,7 @@ export function RestaurantSettingsClient() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
                 <Input
                   id="email"
@@ -105,7 +105,7 @@ export function RestaurantSettingsClient() {
                   }
                   placeholder="contact@restaurant.com"
                 />
-              </div>
+              </div> */}
 
               <div className="space-y-2">
                 <Label htmlFor="address">Dirección</Label>

@@ -157,8 +157,8 @@ export default function MenuPage() {
         handleDataRefresh();
         toast.success(active ? "Producto activado" : "Producto desactivado", {
           description: active
-            ? "El producto ahora es visible en el men� p�blico."
-            : "El producto se ha ocultado del men� p�blico.",
+            ? "El producto ahora es visible en el menu publico."
+            : "El producto se ha ocultado del menu publico.",
         });
       } else {
         toast.error("Error al actualizar el producto", {
@@ -167,7 +167,7 @@ export default function MenuPage() {
       }
     } catch (error) {
       console.error("Error toggling item active state:", error);
-      toast.error("Error de conexi�n", {
+      toast.error("Error de conexion", {
         description: "No se pudo conectar con el servidor.",
       });
     }
@@ -282,7 +282,7 @@ export default function MenuPage() {
     () => [
       {
         id: "all",
-        name: "All Dishes",
+        name: "Todos los Platos",
         itemCount: menuItems.length,
       },
       ...categories
@@ -436,8 +436,8 @@ export default function MenuPage() {
         open={showDeleteCategory}
         onOpenChange={setShowDeleteCategory}
         onConfirm={confirmDeleteCategory}
-        title="Eliminar Categor�a"
-        description="Esta acci�n eliminar� permanentemente la categor�a de tu men�."
+        title="Eliminar Categoria"
+        description="Esta accion eliminara permanentemente la categoria de tu menu."
         itemName={categoryToDelete?.name}
         isLoading={isDeletingCategory}
       />
@@ -447,7 +447,7 @@ export default function MenuPage() {
         onOpenChange={setShowDeleteMenuItem}
         onConfirm={confirmDeleteMenuItem}
         title="Eliminar Producto"
-        description="Esta acci�n eliminar� permanentemente el producto de tu men�."
+        description="Esta accion eliminara permanentemente el producto de tu menu."
         itemName={menuItemToDelete?.name}
         isLoading={isDeletingMenuItem}
       />

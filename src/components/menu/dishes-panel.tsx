@@ -117,7 +117,7 @@ export function DishesPanel({
     return (
       total || {
         id: "all",
-        name: "All Dishes",
+        name: "Todas las Categorías",
         itemCount: menuItems.length,
       }
     );
@@ -134,14 +134,14 @@ export function DishesPanel({
       <div className="border-b border-border bg-card">
         <div className="p-4 lg:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <h1 className="text-2xl font-semibold">Manage Dishes</h1>
+            <h1 className="text-2xl font-semibold">Gestionar Platos</h1>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search dishes"
+                  placeholder="Buscar platos"
                   className="pl-9"
                 />
               </div>
@@ -150,8 +150,8 @@ export function DishesPanel({
                 onClick={onCreateMenuItem}
               >
                 <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Add New Dish</span>
-                <span className="sm:hidden">Add</span>
+                <span className="hidden sm:inline">Agregar Nuevo Plato</span>
+                <span className="sm:hidden">Agregar</span>
               </Button>
             </div>
           </div>
@@ -257,7 +257,7 @@ export function DishesPanel({
                     <Plus className="h-6 w-6 text-primary" />
                   </div>
                   <div className="text-center">
-                    <p className="font-medium">Add New Dish to</p>
+                    <p className="font-medium">Agregar Nuevo Plato a</p>
                     <p className="text-sm text-muted-foreground">
                       {activeCategory.name}
                     </p>
@@ -300,7 +300,7 @@ export function DishesPanel({
                                 onClick={() => onEditMenuItem(dish)}
                               >
                                 <Edit className="mr-2 h-4 w-4" />
-                                Edit dish
+                                Editar plato
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() =>
@@ -310,12 +310,12 @@ export function DishesPanel({
                                 {dish.active ? (
                                   <>
                                     <EyeOff className="mr-2 h-4 w-4" />
-                                    Deactivate
+                                    Desactivar
                                   </>
                                 ) : (
                                   <>
                                     <Eye className="mr-2 h-4 w-4" />
-                                    Activate
+                                    Activar
                                   </>
                                 )}
                               </DropdownMenuItem>
@@ -325,7 +325,7 @@ export function DishesPanel({
                                 className="text-destructive focus:text-destructive"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
+                                Eliminar
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -380,7 +380,7 @@ export function DishesPanel({
                                 : "bg-muted text-muted-foreground"
                             )}
                           >
-                            {dish.active ? "Active" : "Inactive"}
+                            {dish.active ? "Activo" : "Inactivo"}
                           </Badge>
                         </div>
                       </div>

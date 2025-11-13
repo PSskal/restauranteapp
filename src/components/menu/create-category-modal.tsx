@@ -141,24 +141,6 @@ export function CreateCategoryModal({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>URL de imagen (opcional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="https://ejemplo.com/imagen.jpg"
-                      {...field}
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <DialogFooter>
               <Button
                 type="button"

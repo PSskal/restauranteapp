@@ -44,9 +44,9 @@ export function CategoryPanel({
       <div className="border-b border-border px-4 py-5">
         <div className="space-y-1">
           <p className="text-sm font-medium text-muted-foreground">
-            Dishes Category
+            Categorías de Platos
           </p>
-          <h2 className="text-xl font-semibold">Manage Dishes</h2>
+          <h2 className="text-xl font-semibold">Gestionar Platos</h2>
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
@@ -81,7 +81,7 @@ export function CategoryPanel({
                           {category.name}
                         </span>
                         <span className="text-sm text-muted-foreground">
-                          {category.itemCount} dishes
+                          {category.itemCount} platos
                         </span>
                       </div>
                     </button>
@@ -104,7 +104,7 @@ export function CategoryPanel({
                               onClick={() => onEditCategory(category.id)}
                             >
                               <Pencil className="mr-2 h-4 w-4" />
-                              Edit category
+                              Editar categoría
                             </DropdownMenuItem>
                           ) : null}
                           {onDeleteCategory ? (
@@ -115,7 +115,7 @@ export function CategoryPanel({
                                 className="text-destructive focus:text-destructive"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
+                                Eliminar
                               </DropdownMenuItem>
                             </>
                           ) : null}
@@ -130,7 +130,7 @@ export function CategoryPanel({
       {onAddCategory ? (
         <div className="border-t border-border px-4 py-4">
           <Button onClick={onAddCategory} className="w-full">
-            Add New Category
+            Agregar Nueva Categoría
           </Button>
         </div>
       ) : null}

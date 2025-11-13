@@ -6,40 +6,18 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { toast } from "sonner";
-import { z } from "zod";
 
-import { cn } from "@/lib/utils";
-import { signInWithGoogle, signInWithEmail } from "@/lib/auth-actions";
+import { signInWithGoogle } from "@/lib/auth-actions";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 
-import { LastUsed, useLastUsed } from "@/components/hooks/useLastUsed";
 import Google from "@/components/shared/icons/google";
 import { LogoCloud } from "@/components/shared/logo-cloud";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export default function Login() {
   useAuthRedirect(); // Redirigir automáticamente si ya está logueado
 
-  const [lastUsed, setLastUsed] = useLastUsed();
-  type AuthMethod = "google" | "email";
-  const [clickedMethod, setClickedMethod] = useState<AuthMethod | undefined>(
-    undefined
-  );
-  const [email, setEmail] = useState<string>("");
-  const [emailButtonText, setEmailButtonText] = useState<string>(
-    "Continue with Email"
-  );
-
-  const emailSchema = z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(3, { message: "Please enter a valid email." })
-    .email({ message: "Please enter a valid email." });
-
-  const emailValidation = emailSchema.safeParse(email);
+  const [isLoading, setIsLoading] = useState(false);
 
   return (
     <div className="flex h-screen w-full flex-wrap">
@@ -51,127 +29,50 @@ export default function Login() {
         ></div>
         <div className="z-10 mx-5 mt-[calc(1vh)] h-fit w-full max-w-md overflow-hidden rounded-lg sm:mx-0 sm:mt-[calc(2vh)] md:mt-[calc(3vh)]">
           <div className="items-left flex flex-col space-y-3 px-4 py-6 pt-8 sm:px-12">
-            <Image
-              src="/_static/papermark-logo.svg"
-              alt="Papermark Logo"
-              width={140}
-              height={32}
-              className="md:mb-48s -mt-8 mb-36 h-7 w-auto self-start sm:mb-32"
-              priority
-            />
+            <div className="-mt-8 mb-16 self-start sm:mb-20">
+              <h1 className="text-5xl font-bold text-gray-900">PSskal</h1>
+            </div>
             <Link href="/">
               <span className="text-balance text-3xl font-semibold text-gray-900">
-                Welcome to Papermark
+                Bienvenido a PSskal
               </span>
             </Link>
-            <h3 className="text-balance text-sm text-gray-800">
-              Share documents. Not attachments.
+            <h3 className="text-balance text-lg text-gray-800">
+              Devolviendo el control a tu restaurante.
             </h3>
           </div>
-          <form
-            className="flex flex-col gap-4 px-4 pt-8 sm:px-12"
-            action={async (formData) => {
-              if (!emailValidation.success) {
-                toast.error(emailValidation.error.issues[0].message);
-                return;
-              }
 
-              setClickedMethod("email");
-              try {
-                await signInWithEmail(formData);
-                setEmail("");
-                setLastUsed("credentials");
-                setEmailButtonText("Email sent - check your inbox!");
-                toast.success("Email sent - check your inbox!");
-              } catch {
-                setEmailButtonText("Error sending email - try again?");
-                toast.error("Error sending email - try again?");
-              }
-              setClickedMethod(undefined);
-            }}
-          >
-            <Label className="sr-only" htmlFor="email">
-              Email
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              placeholder="name@example.com"
-              type="email"
-              autoCapitalize="none"
-              autoComplete="email"
-              autoCorrect="off"
-              disabled={clickedMethod === "email"}
-              // pattern={patternSimpleEmailRegex}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={cn(
-                "flex h-10 w-full rounded-md border-0 bg-background bg-white px-3 py-2 text-sm text-gray-900 ring-1 ring-gray-200 transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white",
-                email.length > 0 && !emailValidation.success
-                  ? "ring-red-500"
-                  : "ring-gray-200"
-              )}
-            />
-            <div className="relative">
-              <Button
-                type="submit"
-                disabled={!emailValidation.success || !!clickedMethod}
-                className={cn(
-                  "focus:shadow-outline w-full transform rounded px-4 py-2 text-white transition-colors duration-300 ease-in-out focus:outline-none",
-                  clickedMethod === "email"
-                    ? "bg-black opacity-75"
-                    : "bg-gray-800 hover:bg-gray-900"
-                )}
-              >
-                {emailButtonText}
-              </Button>
-              {lastUsed === "credentials" && <LastUsed />}
-            </div>
-          </form>
-          <p className="py-4 text-center">or</p>
-          <div className="flex flex-col space-y-2 px-4 sm:px-12">
-            <div className="relative">
-              <Button
-                onClick={async () => {
-                  setClickedMethod("google");
-                  setLastUsed("google");
-                  try {
-                    await signInWithGoogle();
-                  } catch {
-                    toast.error("Error signing in with Google");
-                  }
-                  setClickedMethod(undefined);
-                }}
-                disabled={clickedMethod && clickedMethod !== "google"}
-                className="flex w-full items-center justify-center space-x-2 border border-gray-300 bg-gray-100 font-normal text-gray-900 hover:bg-gray-200"
-              >
-                <Google className="h-5 w-5" />
-                <span>Continue with Google</span>
-                {clickedMethod !== "google" && lastUsed === "google" && (
-                  <LastUsed />
-                )}
-              </Button>
-            </div>
+          <div className="flex flex-col space-y-4 px-4 pt-12 sm:px-12">
+            <Button
+              onClick={async () => {
+                setIsLoading(true);
+                try {
+                  await signInWithGoogle();
+                } catch {
+                  toast.error("Error al iniciar sesión con Google");
+                }
+                setIsLoading(false);
+              }}
+              disabled={isLoading}
+              className="flex h-12 w-full items-center justify-center space-x-3 rounded-lg border-2 border-gray-300 bg-white font-medium text-gray-900 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md disabled:opacity-50"
+            >
+              <Google className="h-6 w-6" />
+              <span className="text-base">
+                {isLoading ? "Iniciando sesión..." : "Continuar con Google"}
+              </span>
+            </Button>
           </div>
-          <p className="mt-10 w-full max-w-md px-4 text-xs text-muted-foreground sm:px-12">
-            By clicking continue, you acknowledge that you have read and agree
-            to Papermark&apos;s{" "}
-            <a
-              href={`${process.env.NEXT_PUBLIC_MARKETING_URL}/terms`}
-              target="_blank"
-              className="underline"
-            >
-              Terms of Service
+
+          <p className="mt-12 w-full max-w-md px-4 text-xs text-muted-foreground sm:px-12">
+            Al continuar, aceptas haber leído y estar de acuerdo con los{" "}
+            <a href="/terms" target="_blank" className="underline">
+              Términos de Servicio
             </a>{" "}
-            and{" "}
-            <a
-              href={`${process.env.NEXT_PUBLIC_MARKETING_URL}/privacy`}
-              target="_blank"
-              className="underline"
-            >
-              Privacy Policy
-            </a>
-            .
+            y la{" "}
+            <a href="/privacy" target="_blank" className="underline">
+              Política de Privacidad
+            </a>{" "}
+            de PSskal.
           </p>
         </div>
       </div>
@@ -190,7 +91,7 @@ export default function Login() {
               <div className="mb-4 h-64 w-80">
                 <Image
                   className="h-full w-full rounded-2xl object-cover shadow-2xl"
-                  src="/_static/testimonials/backtrace.jpeg"
+                  src="/_static/testimonials/personalRestaurante.webp"
                   alt="Backtrace Capital"
                   width={320}
                   height={256}
@@ -200,16 +101,16 @@ export default function Login() {
               <div className="max-w-xl text-center">
                 <blockquote className="text-balance font-normal leading-8 text-white sm:text-xl sm:leading-9">
                   <p>
-                    &quot;We raised our €30M Fund with Papermark Data Rooms.
-                    Love the customization, security and ease of use.&quot;
+                    &quot;PSskal nos devolvió el control total de nuestro menú
+                    digital. Simple, rápido y sin complicaciones.&quot;
                   </p>
                 </blockquote>
                 <figcaption className="mt-4">
                   <div className="text-balance font-normal text-white">
-                    Michael Münnix
+                    Chef Propietario
                   </div>
                   <div className="text-balance font-light text-gray-400">
-                    Partner, Backtrace Capital
+                    Restaurante Gourmet
                   </div>
                 </figcaption>
               </div>
@@ -220,15 +121,9 @@ export default function Login() {
               style={{ height: "33.3333%" }}
             >
               <div className="mb-4 max-w-xl text-balance text-center font-semibold text-gray-900">
-                Trusted by teams at
+                Instituciones gastronómicas que confían en nosotros
               </div>
               <LogoCloud />
-              {/* <img
-                src="https://assets.papermark.io/upload/file_7JEGY7zM9ZTfmxu8pe7vWj-Screenshot-2025-05-09-at-18.09.13.png"
-                alt="Trusted teams illustration"
-                className="mt-4 max-w-full h-auto object-contain"
-                style={{maxHeight: '120px'}}
-              /> */}
             </div>
           </div>
         </div>

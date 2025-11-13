@@ -430,18 +430,6 @@ export function CreateMenuItemModal({
                           </div>
                         )}
                       </div>
-
-                      {/* Opción 2: URL externa */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          O usar URL externa
-                        </label>
-                        <Input
-                          placeholder="https://ejemplo.com/imagen.jpg"
-                          {...field}
-                          disabled={isLoading || !!selectedFile}
-                        />
-                      </div>
                     </div>
                   </FormControl>
                   <FormMessage />

@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     "Explora en tiempo real los platos activos de todos los restaurantes asociados. Filtra por categoría, ubicación y descubre qué hay disponible hoy mismo.",
 };
 
+// Revalidar cada 60 segundos para mostrar datos actualizados
+export const revalidate = 60;
+
 export default async function Home() {
   const menuItems = await prisma.menuItem.findMany({
     where: {

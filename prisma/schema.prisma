@@ -1,0 +1,263 @@
+// =============== Prisma / PostgreSQL ===============
+generator client { 
+  provider = "prisma-client-js" 
+}
+
+datasource db { 
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+// =============== Enums mínimos (en inglés) ===============
+// Roles de trabajo dentro de un restaurante (DUENO/GERENTE/CAJERO/MESERO/COCINA)
+enum Role { 
+  OWNER 
+  MANAGER 
+  CASHIER 
+  WAITER 
+  KITCHEN 
+}
+
+// Estados principales del pedido para un MVP sencillo
+enum OrderStatus {
+  DRAFT
+  PLACED
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+// Métodos de pago manuales (sin integraciones online)
+enum PaymentMethod { 
+  CASH 
+  CARD 
+}
+
+// Estado de registro de pago (simple)
+enum PaymentStatus { 
+  PENDING 
+  PAID 
+}
+
+enum PlanTier {
+  FREE
+  PREMIUM
+}
+
+// =============== Auth.js Models (Required) ===============
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String?       @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime      @default(now())
+  
+  // Auth.js required relations
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Business relations
+  memberships   Membership[]
+  ownedOrgs     Organization[] @relation("OrganizationOwner")
+  createdOrders Order[]
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =============== Usuarios y pertenencia (multi-tenant una-sede) ===============
+// Restaurant/tenant (una organization = un restaurante)
+model Organization {
+  id         String        @id @default(cuid())
+  name       String
+  slug       String        @unique        // Identificador legible para URL (único)
+  ownerId    String
+  plan       PlanTier      @default(FREE)
+  owner      User          @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  branding   Branding?
+  // Recursos del restaurante:
+  tables     Table[]
+  categories MenuCategory[]
+  menuItems  MenuItem[]
+  orders     Order[]
+  memberships Membership[]
+  invitations Invitation[]
+  createdAt  DateTime      @default(now())
+}
+
+// Relación (usuario ↔ organization) con rol asignado
+model Membership {
+  id        String        @id @default(cuid())
+  userId    String
+  orgId     String
+  role      Role
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId]) // Un usuario no debe duplicar membresía en la misma org
+}
+
+// (Opcional MVP) Invitación por email para asignar roles de forma segura
+model Invitation {
+  id         String        @id @default(cuid())
+  orgId      String
+  email      String
+  role       Role
+  token      String        @unique        // Token para aceptar invitación
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime      @default(now())
+  org        Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+// =============== Mesas (QR) ===============
+// Mesa del salón; cada una tiene un token único para el link público (QR)
+model Table {
+  id        String        @id @default(cuid())
+  orgId     String
+  number    Int
+  qrToken   String        @default(uuid()) // Token para URL pública del QR
+  isEnabled Boolean       @default(false)
+  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orders    Order[]
+
+  @@unique([orgId, number]) // Número de mesa único por restaurante
+}
+
+// =============== Menú básico ===============
+// Categoría de menú (Entradas, Platos, Bebidas, etc.) por restaurante
+model MenuCategory {
+  id        String        @id @default(cuid())
+  orgId     String
+  name      String
+  position  Int           @default(0)     // Para ordenar categorías en la UI
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  items     MenuItem[]
+
+  @@unique([orgId, name]) // Evita duplicados de nombre de categoría en la misma org
+}
+
+// Ítem de menú (plato/bebida) con precio base (centavos)
+model MenuItem {
+  id          String        @id @default(cuid())
+  orgId       String
+  categoryId  String
+  name        String
+  description String?                       // Descripción del producto
+  priceCents  Int                           // Precio en centavos (evita flotantes)
+  imageUrl    String?                       // URL de la imagen del producto
+  active      Boolean       @default(true)  // Para ocultar temporalmente de la carta
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  category    MenuCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@index([orgId, active]) // Búsqueda rápida por org/activo
+}
+
+// =============== Orders y Payments (simple) ===============
+// Pedido generado desde una mesa (QR) o por staff; numeración por restaurante
+model Order {
+  id           String        @id @default(cuid())
+  orgId        String
+  tableId      String?                         // null si fuese para llevar (futuro)
+  number       Int                              // correlativo por restaurant
+  status       OrderStatus   @default(DRAFT)
+  notes        String?
+  totalC       Int            @default(0)      // Total del pedido (centavos)
+  createdById  String?                          // usuario que confirma/crea
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  org          Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  table        Table?         @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  createdBy    User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  items        OrderItem[]
+  payments     Payment[]
+
+  @@unique([orgId, number])      // Número único por restaurante
+  @@index([orgId, status])       // Filtros comunes: por org y estado
+}
+
+// Ítem del pedido; se guardan nombre y precio al momento (histórico)
+model OrderItem {
+  id        String     @id @default(cuid())
+  orderId   String
+  menuItemId String
+  name      String                      // Denormalizado para conservar histórico
+  quantity  Int         @default(1)
+  priceC    Int                              // Precio unitario (centavos)
+  totalC    Int                              // quantity * priceC
+  notes     String?
+
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem  MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+}
+
+// Registro de pago manual (efectivo/tarjeta); sin integraciones online
+model Payment {
+  id        String         @id @default(cuid())
+  orderId   String
+  method    PaymentMethod
+  status    PaymentStatus  @default(PENDING)
+  amountC   Int
+  createdAt DateTime       @default(now())
+
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Branding {
+  id          String        @id @default(cuid())
+  orgId       String        @unique
+  brandColor  String        @default("#146E37")
+  accentColor String        @default("#F9FAFB")
+  logoUrl     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+
+
+

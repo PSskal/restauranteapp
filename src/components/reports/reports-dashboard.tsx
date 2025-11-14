@@ -127,7 +127,7 @@ const PAYMENT_LABELS: Record<PaymentMethodKey, string> = {
   CARD: "Tarjeta",
 };
 
-const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const formatCurrency = (cents: number) => `S/ ${(cents / 100).toFixed(2)}`;
 
 const parseISODateLocal = (iso: string) => {
   if (!iso) {

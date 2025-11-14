@@ -38,7 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const formatCurrency = (cents: number) => "$" + (cents / 100).toFixed(2);
+const formatCurrency = (cents: number) => "S/ " + (cents / 100).toFixed(2);
 
 type Category = {
   id: string;
@@ -175,7 +175,9 @@ export function PosTerminal() {
         tables: Array<{ id: string; number: number; isEnabled: boolean }>;
       };
 
-      const enabledTables = (data.tables ?? []).filter((table) => table.isEnabled);
+      const enabledTables = (data.tables ?? []).filter(
+        (table) => table.isEnabled
+      );
       setTables(enabledTables);
       setSelectedTableId((prev) =>
         prev && enabledTables.some((table) => table.id === prev) ? prev : null
@@ -330,6 +332,166 @@ export function PosTerminal() {
     }
   }, [cart, clearCart, currentOrgId, loadCatalog, orderNotes, selectedTableId]);
 
+  const handlePrintPrecheck = useCallback(() => {
+    if (cart.length === 0) {
+      toast.error("Agrega productos para imprimir la precuenta");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("No se pudo abrir la ventana de impresión");
+      return;
+    }
+
+    const subtotal = cartTotalC;
+    const total = subtotal;
+    const selectedTable = tables.find((t) => t.id === selectedTableId);
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Precuenta - ${currentOrg?.name || "Restaurante"}</title>
+          <meta charset="UTF-8" />
+          <style>
+            @media print {
+              @page { margin: 0; size: 80mm auto; }
+              body { margin: 0; padding: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              line-height: 1.4;
+              max-width: 80mm;
+              margin: 0 auto;
+              padding: 10mm;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 15px;
+              border-bottom: 2px dashed #000;
+              padding-bottom: 10px;
+            }
+            .header h1 {
+              margin: 0 0 5px 0;
+              font-size: 18px;
+              font-weight: bold;
+            }
+            .header p {
+              margin: 3px 0;
+              font-size: 11px;
+            }
+            .info {
+              margin-bottom: 15px;
+              padding-bottom: 10px;
+              border-bottom: 1px dashed #000;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin: 3px 0;
+            }
+            .items {
+              margin-bottom: 15px;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 10px;
+            }
+            .item {
+              margin: 8px 0;
+            }
+            .item-header {
+              display: flex;
+              justify-content: space-between;
+              font-weight: bold;
+            }
+            .totals {
+              margin-top: 10px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              margin: 5px 0;
+            }
+            .total-row.grand {
+              font-size: 14px;
+              font-weight: bold;
+              border-top: 2px solid #000;
+              padding-top: 8px;
+              margin-top: 8px;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 15px;
+              padding-top: 10px;
+              border-top: 2px dashed #000;
+              font-size: 11px;
+            }
+            .footer p {
+              margin: 3px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${currentOrg?.name || "RESTAURANTE"}</h1>
+            <p>PRECUENTA</p>
+            <p>No válido como comprobante de pago</p>
+            <p>${new Date().toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</p>
+          </div>
+
+          <div class="info">
+            ${selectedTable ? `<div class="info-row"><span><strong>Mesa:</strong> ${selectedTable.number}</span></div>` : ""}
+            ${orderNotes ? `<div class="info-row"><span><strong>Nota:</strong> ${orderNotes}</span></div>` : ""}
+          </div>
+
+          <div class="items">
+            <div style="font-weight: bold; margin-bottom: 8px;">DETALLE:</div>
+            ${cart
+              .map(
+                (item) => `
+              <div class="item">
+                <div class="item-header">
+                  <span>${item.quantity}x ${item.name}</span>
+                  <span>S/ ${((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
+                </div>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+
+          <div class="totals">
+            <div class="total-row grand">
+              <span>TOTAL:</span>
+              <span>S/ ${(total / 100).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>¡Gracias por su preferencia!</p>
+            <p>Solicite su comprobante de pago</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.close();
+                }, 100);
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    toast.success("Abriendo ventana de impresión...");
+  }, [cart, cartTotalC, currentOrg, orderNotes, selectedTableId, tables]);
+
   if (isOrgLoading) {
     return (
       <Card>
@@ -386,7 +548,8 @@ export function PosTerminal() {
               </div>
             ) : tables.length === 0 ? (
               <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                No hay mesas habilitadas. Activa una mesa desde la sección Mesas antes de continuar.
+                No hay mesas habilitadas. Activa una mesa desde la sección Mesas
+                antes de continuar.
               </p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
@@ -720,9 +883,14 @@ export function PosTerminal() {
           {cart.length > 0 && (
             <div className="p-6 border-t">
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 bg-transparent">
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  onClick={handlePrintPrecheck}
+                  disabled={isSubmitting}
+                >
                   <Printer className="h-4 w-4 mr-2" />
-                  Imprimir
+                  Imprimir Precuenta
                 </Button>
                 <Button
                   className="flex-1"
@@ -878,9 +1046,11 @@ export function PosTerminal() {
                       <Button
                         variant="outline"
                         className="flex-1 bg-transparent"
+                        onClick={handlePrintPrecheck}
+                        disabled={isSubmitting}
                       >
                         <Printer className="h-4 w-4 mr-2" />
-                        Imprimir
+                        Imprimir Precuenta
                       </Button>
                       <Button
                         className="flex-1"

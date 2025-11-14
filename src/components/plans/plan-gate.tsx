@@ -74,7 +74,7 @@ export function PlanGate({
       </CardHeader>
       <CardContent className="flex items-center gap-3 text-sm text-muted-foreground">
         <Lock className="h-4 w-4" />
-        Esta sección est� bloqueada para el plan Free. Actualiza para
+        Esta sección esta bloqueada para el plan Free. Actualiza para
         desbloquearla.
       </CardContent>
     </Card>

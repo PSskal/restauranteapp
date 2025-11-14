@@ -9,10 +9,10 @@ import {
   CheckCircle2,
   CircleCheck,
   ChefHat,
-  ClipboardList,
   DollarSign,
   Loader2,
   Plus,
+  Printer,
   RefreshCcw,
   UtensilsCrossed,
   XCircle,
@@ -124,7 +124,7 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   "READY",
 ];
 
-const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const formatCurrency = (cents: number) => `S/ ${(cents / 100).toFixed(2)}`;
 
 function formatTime(dateIso: string) {
   const date = new Date(dateIso);
@@ -178,6 +178,11 @@ export function OrdersDashboard() {
         ? "No pudimos cargar los pedidos"
         : null;
 
+  // Filtrar pedidos con pago pendiente (SERVED y no pagados)
+  const unpaidOrders = useMemo(() => {
+    return orders.filter((order) => order.status === "SERVED" && !order.isPaid);
+  }, [orders]);
+
   const ordersByStatus = useMemo(() => {
     const grouped: Record<OrderStatus, StaffOrder[]> = {
       DRAFT: [],
@@ -194,6 +199,168 @@ export function OrdersDashboard() {
 
     return grouped;
   }, [orders]);
+
+  const handlePrintPrecheck = useCallback((order: StaffOrder) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("No se pudo abrir la ventana de impresión");
+      return;
+    }
+
+    const subtotal = order.totalC;
+    const total = subtotal;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Precuenta - Pedido #${order.number}</title>
+          <meta charset="UTF-8" />
+          <style>
+            @media print {
+              @page { margin: 0; size: 80mm auto; }
+              body { margin: 0; padding: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              line-height: 1.4;
+              max-width: 80mm;
+              margin: 0 auto;
+              padding: 10mm;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 15px;
+              border-bottom: 2px dashed #000;
+              padding-bottom: 10px;
+            }
+            .header h1 {
+              margin: 0 0 5px 0;
+              font-size: 18px;
+              font-weight: bold;
+            }
+            .header p {
+              margin: 3px 0;
+              font-size: 11px;
+            }
+            .info {
+              margin-bottom: 15px;
+              padding-bottom: 10px;
+              border-bottom: 1px dashed #000;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin: 3px 0;
+            }
+            .items {
+              margin-bottom: 15px;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 10px;
+            }
+            .item {
+              margin: 8px 0;
+            }
+            .item-header {
+              display: flex;
+              justify-content: space-between;
+              font-weight: bold;
+            }
+            .item-notes {
+              font-size: 10px;
+              font-style: italic;
+              margin-left: 10px;
+              color: #555;
+            }
+            .totals {
+              margin-top: 10px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              margin: 5px 0;
+            }
+            .total-row.grand {
+              font-size: 14px;
+              font-weight: bold;
+              border-top: 2px solid #000;
+              padding-top: 8px;
+              margin-top: 8px;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 15px;
+              padding-top: 10px;
+              border-top: 2px dashed #000;
+              font-size: 11px;
+            }
+            .footer p {
+              margin: 3px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>PRECUENTA</h1>
+            <p>No válido como comprobante de pago</p>
+            <p>${new Date().toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</p>
+          </div>
+
+          <div class="info">
+            <div class="info-row">
+              <span><strong>Pedido:</strong> #${order.number}</span>
+              <span><strong>Mesa:</strong> ${order.table?.number || "N/A"}</span>
+            </div>
+            ${order.notes ? `<div class="info-row"><span><strong>Nota:</strong> ${order.notes}</span></div>` : ""}
+          </div>
+
+          <div class="items">
+            <div style="font-weight: bold; margin-bottom: 8px;">DETALLE:</div>
+            ${order.items
+              .map(
+                (item) => `
+              <div class="item">
+                <div class="item-header">
+                  <span>${item.quantity}x ${item.name}</span>
+                  <span>S/ ${(item.totalC / 100).toFixed(2)}</span>
+                </div>
+                ${item.notes ? `<div class="item-notes">* ${item.notes}</div>` : ""}
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+
+          <div class="totals">
+            <div class="total-row grand">
+              <span>TOTAL:</span>
+              <span>S/ ${(total / 100).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>¡Gracias por su preferencia!</p>
+            <p>Solicite su comprobante de pago</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.close();
+                }, 100);
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  }, []);
 
   const handleStatusUpdate = useCallback(
     async (orderId: string, nextStatus: OrderStatus) => {
@@ -347,47 +514,7 @@ export function OrdersDashboard() {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total pedidos
-              </CardTitle>
-              \n <ClipboardList className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metrics.total}</div>
-              <p className="text-xs text-muted-foreground">
-                Historial completo del restaurante
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">En curso</CardTitle>
-              <ChefHat className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metrics.active}</div>
-              <p className="text-xs text-muted-foreground">
-                Pendientes de ser servidos
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Servidos</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.byStatus.SERVED ?? 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Pedidos completados
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ingresos</CardTitle>\n{" "}
+              <CardTitle className="text-sm font-medium">Ingresos</CardTitle>{" "}
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -439,10 +566,52 @@ export function OrdersDashboard() {
             onStatusChange={handleStatusUpdate}
             updatingOrderId={updatingOrderId}
             onRegisterPayment={handleRegisterPayment}
+            onPrintPrecheck={handlePrintPrecheck}
             payingOrderId={payingOrderId}
           />
         ))}
       </div>
+
+      {/* Sección de Pagos Pendientes */}
+      {unpaidOrders.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-amber-600" />
+                  Pagos Pendientes
+                </CardTitle>
+                <CardDescription>
+                  Pedidos servidos que aún no han sido pagados
+                </CardDescription>
+              </div>
+              <Badge
+                variant="outline"
+                className="border-amber-600 text-amber-700"
+              >
+                {unpaidOrders.length}{" "}
+                {unpaidOrders.length === 1 ? "pedido" : "pedidos"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {unpaidOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  updating={updatingOrderId === order.id}
+                  onStatusChange={handleStatusUpdate}
+                  onRegisterPayment={handleRegisterPayment}
+                  onPrintPrecheck={handlePrintPrecheck}
+                  isPaying={payingOrderId === order.id}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <HistorySection
         served={ordersByStatus.SERVED}
@@ -475,6 +644,7 @@ type OrderColumnProps = {
   updatingOrderId: string | null;
   onStatusChange: (orderId: string, status: OrderStatus) => void;
   onRegisterPayment: (orderId: string) => void;
+  onPrintPrecheck: (order: StaffOrder) => void;
   payingOrderId: string | null;
 };
 
@@ -485,6 +655,7 @@ function OrderColumn({
   updatingOrderId,
   onStatusChange,
   onRegisterPayment,
+  onPrintPrecheck,
   payingOrderId,
 }: OrderColumnProps) {
   return (
@@ -506,6 +677,7 @@ function OrderColumn({
               updating={updatingOrderId === order.id}
               onStatusChange={onStatusChange}
               onRegisterPayment={onRegisterPayment}
+              onPrintPrecheck={onPrintPrecheck}
               isPaying={payingOrderId === order.id}
             />
           ))
@@ -520,6 +692,7 @@ type OrderCardProps = {
   updating: boolean;
   onStatusChange: (orderId: string, status: OrderStatus) => void;
   onRegisterPayment: (orderId: string) => void;
+  onPrintPrecheck: (order: StaffOrder) => void;
   isPaying: boolean;
 };
 
@@ -528,6 +701,7 @@ function OrderCard({
   updating,
   onStatusChange,
   onRegisterPayment,
+  onPrintPrecheck,
   isPaying,
 }: OrderCardProps) {
   const nextStatuses = statusTransitions[order.status] || [];
@@ -537,7 +711,9 @@ function OrderCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold">Pedido #{order.number}</h3>
+            <h3 className="text-xl font-bold">
+              {order.table ? `Mesa ${order.table.number}` : "Sin Mesa"}
+            </h3>
             <Badge variant={statusBadgeVariants[order.status]}>
               {statusLabels[order.status]}
             </Badge>
@@ -553,8 +729,7 @@ function OrderCard({
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            {order.table ? `Mesa ${order.table.number}` : "Sin mesa"} • &nbsp;
-            {formatTime(order.createdAt)}
+            Pedido #{order.number} • {formatTime(order.createdAt)}
           </p>
         </div>
         <div className="text-right font-semibold text-green-600">
@@ -590,6 +765,20 @@ function OrderCard({
           </p>
         </div>
       ) : null}
+
+      {/* Botón manual para imprimir precuenta - Solo visible en READY y SERVED */}
+      {(order.status === "READY" || order.status === "SERVED") && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+          onClick={() => onPrintPrecheck(order)}
+          disabled={updating}
+        >
+          <Printer className="h-4 w-4" />
+          Imprimir Precuenta
+        </Button>
+      )}
 
       {!order.isPaid ? (
         <Button

@@ -83,7 +83,7 @@ export function MenuDisplay({
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const formatCurrency = (cents: number) => "$" + (cents / 100).toFixed(2);
+  const formatCurrency = (cents: number) => "S/ " + (cents / 100).toFixed(2);
 
   const handleAddToCart = (item: PublicMenuItem) => {
     if (onAddItem) {
@@ -324,7 +324,9 @@ export function MenuDisplay({
             size="sm"
             onClick={() => setSelectedCategory(null)}
             style={
-              selectedCategory === null ? primaryButtonStyle : outlineButtonStyle
+              selectedCategory === null
+                ? primaryButtonStyle
+                : outlineButtonStyle
             }
           >
             Todas

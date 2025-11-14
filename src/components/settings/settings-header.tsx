@@ -23,21 +23,6 @@ const settingsNavigation: NavigationItem[] = [
     href: `/dashboard/configuracion/restaurante`,
     segment: "restaurante",
   },
-  {
-    label: "Mesas",
-    href: `/dashboard/configuracion/mesas`,
-    segment: "mesas",
-  },
-  {
-    label: "Categorías",
-    href: `/dashboard/configuracion/categorias`,
-    segment: "categorias",
-  },
-  {
-    label: "Personal",
-    href: `/dashboard/configuracion/personal`,
-    segment: "personal",
-  },
 ];
 
 export function SettingsHeader() {

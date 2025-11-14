@@ -13,19 +13,71 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Save } from "lucide-react";
+import { MapPin, Save } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export function RestaurantSettingsClient() {
   const { currentOrg } = useOrganization();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [formData, setFormData] = useState({
     name: currentOrg?.name || "Mi Primer Restaurante",
     address: "",
     phone: "",
     email: "",
     description: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Tu navegador no soporta geolocalización");
+      return;
+    }
+
+    setIsGettingLocation(true);
+    toast.info("Obteniendo coordenadas...");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+
+        setFormData((prev) => ({
+          ...prev,
+          latitude,
+          longitude,
+        }));
+
+        setIsGettingLocation(false);
+        toast.success("Coordenadas obtenidas correctamente");
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        console.error("Error getting location:", error);
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            toast.error("Permiso de ubicación denegado");
+            break;
+          case error.POSITION_UNAVAILABLE:
+            toast.error("Ubicación no disponible");
+            break;
+          case error.TIMEOUT:
+            toast.error("Tiempo de espera agotado");
+            break;
+          default:
+            toast.error("Error al obtener ubicación");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,32 +146,55 @@ export function RestaurantSettingsClient() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {/* <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                  placeholder="contact@restaurant.com"
-                />
-              </div> */}
-
               <div className="space-y-2">
                 <Label htmlFor="address">Dirección</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      address: e.target.value,
-                    }))
-                  }
-                  placeholder="123 Main Street, City"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        address: e.target.value,
+                      }))
+                    }
+                    placeholder="Av. Ejemplo 123, Lima"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Coordenadas GPS</Label>
+                <div className="flex gap-2">
+                  {formData.latitude && formData.longitude ? (
+                    <div className="flex flex-1 items-center rounded-md border border-input bg-muted px-3 py-2">
+                      <p className="text-sm">
+                        {formData.latitude.toFixed(6)},{" "}
+                        {formData.longitude.toFixed(6)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center rounded-md border border-input bg-muted px-3 py-2">
+                      <p className="text-sm text-muted-foreground">
+                        Sin coordenadas
+                      </p>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleGetCurrentLocation}
+                    disabled={isGettingLocation}
+                    title="Obtener coordenadas GPS"
+                  >
+                    <MapPin
+                      className={
+                        isGettingLocation ? "h-4 w-4 animate-pulse" : "h-4 w-4"
+                      }
+                    />
+                  </Button>
+                </div>
               </div>
             </div>
 

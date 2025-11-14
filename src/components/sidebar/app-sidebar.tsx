@@ -69,18 +69,6 @@ const restaurantNavigation = [
         title: "Restaurante",
         url: "/dashboard/configuracion/restaurante",
       },
-      {
-        title: "Mesas",
-        url: "/dashboard/configuracion/mesas",
-      },
-      {
-        title: "Categorías",
-        url: "/dashboard/configuracion/categorias",
-      },
-      {
-        title: "Personal",
-        url: "/dashboard/configuracion/personal",
-      },
     ],
   },
   {
@@ -129,8 +117,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Convertir organizaciones a formato del TeamSwitcher
   const restaurantTeams = organizations.map((org) => {
     const planLabel = org.plan === "PREMIUM" ? "Premium" : "Free";
-    const roleLabel =
-      org.ownerId === session?.user?.id ? "Owner" : "Miembro";
+    const roleLabel = org.ownerId === session?.user?.id ? "Owner" : "Miembro";
 
     return {
       name: org.name,

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { toast } from "sonner";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Edit } from "lucide-react";
+import { Loader2, Edit, Upload, X, Image as ImageIcon } from "lucide-react";
 
 const formSchema = z.object({
   name: z
@@ -90,6 +91,9 @@ export function EditMenuItemModal({
   menuItem,
 }: EditMenuItemModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -114,8 +118,65 @@ export function EditMenuItemModal({
         imageUrl: menuItem.imageUrl || "",
         active: menuItem.active,
       });
+      setImagePreview(menuItem.imageUrl || null);
     }
   }, [menuItem, open, form]);
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith("image/")) {
+      toast.error("El archivo debe ser una imagen");
+      return;
+    }
+
+    // Validar tamaño (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no debe superar los 5MB");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    toast.info("📊 Subiendo imagen...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("orgId", organizationId);
+
+      const response = await fetch("/api/upload/image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Error al subir la imagen");
+      }
+
+      const data = await response.json();
+      form.setValue("imageUrl", data.url);
+      setImagePreview(data.url);
+      toast.success("Imagen subida correctamente");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast.error("Error al subir la imagen", {
+        description:
+          error instanceof Error ? error.message : "Inténtalo de nuevo",
+      });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    form.setValue("imageUrl", "");
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!menuItem) return;
@@ -134,6 +195,7 @@ export function EditMenuItemModal({
             price: parseFloat(values.price),
             categoryId: values.categoryId,
             description: values.description || undefined,
+            imageUrl: values.imageUrl || undefined,
             active: values.active,
           }),
         }
@@ -280,15 +342,73 @@ export function EditMenuItemModal({
             <FormField
               control={form.control}
               name="imageUrl"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
-                  <FormLabel>URL de imagen (opcional)</FormLabel>
+                  <FormLabel>Imagen del producto (opcional)</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="https://ejemplo.com/imagen.jpg"
-                      {...field}
-                      disabled={isLoading}
-                    />
+                    <div className="space-y-4">
+                      {imagePreview ? (
+                        <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
+                          <Image
+                            src={imagePreview}
+                            alt="Preview del producto"
+                            fill
+                            className="object-cover"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute right-2 top-2"
+                            onClick={handleRemoveImage}
+                            disabled={isLoading || isUploadingImage}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-8">
+                          <div className="text-center">
+                            <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              Sin imagen
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file);
+                          }}
+                          disabled={isLoading || isUploadingImage}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isLoading || isUploadingImage}
+                        >
+                          {isUploadingImage ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Subiendo...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="mr-2 h-4 w-4" />
+                              {imagePreview ? "Cambiar imagen" : "Subir imagen"}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

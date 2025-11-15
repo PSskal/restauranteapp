@@ -107,6 +107,14 @@ model Organization {
   slug       String        @unique        // Identificador legible para URL (único)
   ownerId    String
   plan       PlanTier      @default(FREE)
+  phone      String?
+  email      String?
+  address    String?
+  description String?      @db.Text
+  latitude   Float?
+  longitude  Float?
+  whatsappNumber           String?
+  whatsappOrderingEnabled  Boolean        @default(false)
   owner      User          @relation("OrganizationOwner", fields: [ownerId], references: [id])
   branding   Branding?
   // Recursos del restaurante:
@@ -116,6 +124,7 @@ model Organization {
   orders     Order[]
   memberships Membership[]
   invitations Invitation[]
+  openingHours OpeningHour[]
   createdAt  DateTime      @default(now())
 }
 
@@ -256,6 +265,21 @@ model Branding {
   updatedAt   DateTime      @updatedAt
 
   org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model OpeningHour {
+  id        String        @id @default(cuid())
+  orgId     String
+  dayOfWeek Int
+  isOpen    Boolean       @default(true)
+  openTime  String?
+  closeTime String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, dayOfWeek])
 }
 
 

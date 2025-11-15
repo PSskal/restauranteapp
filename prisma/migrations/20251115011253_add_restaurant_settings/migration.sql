@@ -67,6 +67,14 @@ CREATE TABLE "public"."Organization" (
     "slug" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
     "plan" "public"."PlanTier" NOT NULL DEFAULT 'FREE',
+    "phone" TEXT,
+    "email" TEXT,
+    "address" TEXT,
+    "description" TEXT,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
+    "whatsappNumber" TEXT,
+    "whatsappOrderingEnabled" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Organization_pkey" PRIMARY KEY ("id")
@@ -190,6 +198,20 @@ CREATE TABLE "public"."Branding" (
     CONSTRAINT "Branding_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "public"."OpeningHour" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "dayOfWeek" INTEGER NOT NULL,
+    "isOpen" BOOLEAN NOT NULL DEFAULT true,
+    "openTime" TEXT,
+    "closeTime" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "OpeningHour_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
 
@@ -234,6 +256,9 @@ CREATE INDEX "OrderItem_orderId_idx" ON "public"."OrderItem"("orderId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Branding_orgId_key" ON "public"."Branding"("orgId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OpeningHour_orgId_dayOfWeek_key" ON "public"."OpeningHour"("orgId", "dayOfWeek");
 
 -- AddForeignKey
 ALTER TABLE "public"."Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -285,3 +310,6 @@ ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_orderId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "public"."Branding" ADD CONSTRAINT "Branding_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "public"."Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."OpeningHour" ADD CONSTRAINT "OpeningHour_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "public"."Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;

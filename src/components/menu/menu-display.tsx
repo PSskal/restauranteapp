@@ -28,6 +28,7 @@ export interface PublicMenuItem {
 interface MenuDisplayProps {
   orgId?: string;
   tableToken?: string;
+  publicSlug?: string;
   onAddItem?: (item: PublicMenuItem) => void;
   onUpdateQuantity?: (menuItemId: string, delta: number) => void;
   cartItems?: Array<{ menuItemId: string; quantity: number }>;
@@ -58,6 +59,7 @@ function hexToRgba(hex: string, alpha: number) {
 export function MenuDisplay({
   orgId,
   tableToken,
+  publicSlug,
   onAddItem,
   onUpdateQuantity,
   cartItems = [],
@@ -121,6 +123,29 @@ export function MenuDisplay({
           return;
         }
 
+        if (publicSlug) {
+          const response = await fetch(
+            `/api/public/restaurants/${publicSlug}/menu`
+          );
+
+          if (!response.ok) {
+            if (response.status === 403) {
+              throw new Error(
+                "Este restaurante no tiene su carta pública disponible"
+              );
+            }
+
+            throw new Error(
+              `Public menu request failed with ${response.status}`
+            );
+          }
+
+          const data = await response.json();
+          setCategories(data.categories || []);
+          setMenuItems(data.menuItems || []);
+          return;
+        }
+
         if (!orgId) {
           setError("No hay un origen de menu disponible");
           return;
@@ -149,7 +174,7 @@ export function MenuDisplay({
     };
 
     fetchMenu();
-  }, [orgId, tableToken]);
+  }, [orgId, tableToken, publicSlug]);
 
   if (isLoading) {
     return (

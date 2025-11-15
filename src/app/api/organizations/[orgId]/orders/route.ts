@@ -304,19 +304,27 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const membership = await prisma.membership.findFirst({
-      where: {
-        userId: session.user.id,
-        orgId,
-      },
-    });
+    const [membership, organization] = await Promise.all([
+      prisma.membership.findFirst({
+        where: {
+          userId: session.user.id,
+          orgId,
+        },
+      }),
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { ownerId: true },
+      }),
+    ]);
 
-    const isOwner = await prisma.organization.findFirst({
-      where: {
-        id: orgId,
-        ownerId: session.user.id,
-      },
-    });
+    if (!organization) {
+      return NextResponse.json(
+        { error: "Restaurante no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    const isOwner = organization.ownerId === session.user.id;
 
     if (!membership && !isOwner) {
       return NextResponse.json(

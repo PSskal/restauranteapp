@@ -368,6 +368,15 @@ export const PLAN_FEATURE_SECTIONS: PlanFeatureSection[] = [
           PREMIUM: { type: "boolean", value: true },
         },
       },
+      {
+        key: "whatsapp-orders",
+        label: "Pedidos directos por WhatsApp",
+        helper: "Carta pública con carrito y mensaje estructurado listo para enviar.",
+        values: {
+          FREE: { type: "boolean", value: false },
+          PREMIUM: { type: "boolean", value: true },
+        },
+      },
     ],
   },
   {

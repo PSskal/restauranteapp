@@ -19,6 +19,14 @@ interface Organization {
   ownerId: string;
   plan: PlanId;
   createdAt: Date;
+  whatsappNumber: string | null;
+  whatsappOrderingEnabled: boolean;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface Membership {

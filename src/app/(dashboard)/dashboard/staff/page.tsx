@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { auth } from "@/auth";
@@ -88,7 +89,7 @@ export default async function StaffPage() {
             Necesitas crear un restaurante para gestionar el personal.
           </p>
           <Button className="mt-4" asChild>
-            <a href="/dashboard">Volver al Dashboard</a>
+            <Link href="/dashboard">Volver al Dashboard</Link>
           </Button>
         </div>
       </div>

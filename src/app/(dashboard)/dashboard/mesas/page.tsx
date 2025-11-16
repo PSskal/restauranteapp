@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -243,7 +244,7 @@ export default function MesasPage() {
             mesas.
           </p>
           <Button className="mt-4" asChild>
-            <a href="/dashboard">Volver al Dashboard</a>
+            <Link href="/dashboard">Volver al Dashboard</Link>
           </Button>
         </div>
       </div>

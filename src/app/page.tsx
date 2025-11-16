@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { ChefHat, Timer, UtensilsCrossed } from "lucide-react";
 import { PlanTier } from "@prisma/client";
 
@@ -105,7 +106,7 @@ export default async function Home() {
                   <a href="#explorar">Descubrir platos</a>
                 </Button>
                 <Button size="lg" variant="outline" asChild>
-                  <a href="/dashboard">Soy un restaurante</a>
+                  <Link href="/dashboard">Soy un restaurante</Link>
                 </Button>
               </div>
               <div className="grid gap-4 rounded-2xl border border-orange-200 bg-white/70 p-6 shadow-sm backdrop-blur md:grid-cols-3">

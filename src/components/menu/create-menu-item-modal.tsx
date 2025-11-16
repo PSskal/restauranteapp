@@ -363,7 +363,7 @@ export function CreateMenuItemModal({
             <FormField
               control={form.control}
               name="imageUrl"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel>Imagen del producto</FormLabel>
                   <FormControl>

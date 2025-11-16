@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useSession } from "next-auth/react";
@@ -325,7 +326,7 @@ export default function MenuPage() {
             el men�.
           </p>
           <Button className="mt-4" asChild>
-            <a href="/dashboard">Volver al Dashboard</a>
+            <Link href="/dashboard">Volver al Dashboard</Link>
           </Button>
         </div>
       </div>

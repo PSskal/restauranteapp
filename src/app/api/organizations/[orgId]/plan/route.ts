@@ -62,13 +62,19 @@ export async function PATCH(
 
     const updated = await prisma.organization.update({
       where: { id: orgId },
-      data: { plan: nextPlan },
+      data: {
+        plan: nextPlan,
+        planExpiresAt: null,
+        planUpdatedAt: new Date(),
+      },
       select: {
         id: true,
         name: true,
         slug: true,
         ownerId: true,
         plan: true,
+        planExpiresAt: true,
+        planUpdatedAt: true,
         createdAt: true,
       },
     });

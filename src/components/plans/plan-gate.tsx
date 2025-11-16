@@ -31,6 +31,17 @@ export function PlanGate({
   children,
 }: PlanGateProps) {
   const { currentOrg, isLoading } = useOrganization();
+  const expiresAtDate = currentOrg?.planExpiresAt
+    ? new Date(currentOrg.planExpiresAt)
+    : null;
+
+  const premiumTrialExpired =
+    currentOrg?.plan === "PREMIUM" &&
+    expiresAtDate !== null &&
+    expiresAtDate.getTime() <= Date.now();
+
+  const effectivePlan =
+    premiumTrialExpired && currentOrg ? "FREE" : currentOrg?.plan;
 
   if (isLoading && !currentOrg) {
     return (
@@ -48,7 +59,7 @@ export function PlanGate({
   const hasAccess =
     !currentOrg || requiredPlan === "FREE"
       ? true
-      : currentOrg.plan === requiredPlan;
+      : effectivePlan === requiredPlan;
 
   if (hasAccess) {
     return <>{children}</>;
@@ -66,6 +77,17 @@ export function PlanGate({
           </CardTitle>
           <CardDescription className="mt-2 text-base text-muted-foreground">
             {description}
+            {currentOrg?.plan === "PREMIUM" && expiresAtDate && (
+              <span
+                className={`mt-1 block text-sm ${
+                  premiumTrialExpired ? "text-destructive" : ""
+                }`}
+              >
+                {premiumTrialExpired
+                  ? `La prueba expiró el ${expiresAtDate.toLocaleDateString()}`
+                  : `Tu acceso Premium vence el ${expiresAtDate.toLocaleDateString()}`}
+              </span>
+            )}
           </CardDescription>
         </div>
         <div className="mt-3 w-full sm:mt-0 sm:w-auto">
@@ -74,8 +96,8 @@ export function PlanGate({
       </CardHeader>
       <CardContent className="flex items-center gap-3 text-sm text-muted-foreground">
         <Lock className="h-4 w-4" />
-        Esta sección esta bloqueada para el plan Free. Actualiza para
-        desbloquearla.
+        Esta sección está bloqueada para el plan Free o cuando una prueba ya
+        venció. Actualiza para desbloquearla.
       </CardContent>
     </Card>
   );

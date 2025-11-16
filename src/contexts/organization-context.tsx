@@ -18,6 +18,8 @@ interface Organization {
   slug: string;
   ownerId: string;
   plan: PlanId;
+  planExpiresAt: string | Date | null;
+  planUpdatedAt: string | Date | null;
   createdAt: Date;
   whatsappNumber: string | null;
   whatsappOrderingEnabled: boolean;

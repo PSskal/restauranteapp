@@ -4,16 +4,19 @@ import { cache } from "react";
 import { PlanTier } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { ensureActivePlan } from "@/lib/plan-expiration";
 import { PublicRestaurantMenu } from "@/components/public/public-restaurant-menu";
 
 const getRestaurantBySlug = cache(async (slug: string) => {
-  return prisma.organization.findUnique({
+  const organization = await prisma.organization.findUnique({
     where: { slug },
     select: {
       id: true,
       name: true,
       slug: true,
       plan: true,
+      planExpiresAt: true,
+      planUpdatedAt: true,
       whatsappNumber: true,
       whatsappOrderingEnabled: true,
       branding: {
@@ -25,6 +28,8 @@ const getRestaurantBySlug = cache(async (slug: string) => {
       },
     },
   });
+
+  return ensureActivePlan(organization);
 });
 
 export const revalidate = 120;
@@ -82,4 +87,3 @@ export default async function RestaurantPublicMenuPage({
     />
   );
 }
-

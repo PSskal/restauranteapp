@@ -9,6 +9,7 @@ import {
   Home,
   QrCode,
   Settings,
+  ShieldCheck,
   Store,
   Users,
   Utensils,
@@ -100,6 +101,21 @@ const quickActions = [
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session } = useSession();
   const { organizations } = useOrganization();
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase();
+  const isAdmin =
+    !!adminEmail && session?.user?.email?.toLowerCase() === adminEmail;
+
+  const mainNavigation = React.useMemo(() => {
+    const items = [...restaurantNavigation];
+    if (isAdmin) {
+      items.push({
+        title: "Admin",
+        url: "/dashboard/admin",
+        icon: ShieldCheck,
+      });
+    }
+    return items;
+  }, [isAdmin]);
 
   // Datos del usuario desde la sesión
   const userData = session?.user
@@ -133,7 +149,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={restaurantTeams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={restaurantNavigation} />
+        <NavMain items={mainNavigation} />
         <NavProjects projects={quickActions} />
       </SidebarContent>
       <SidebarFooter>

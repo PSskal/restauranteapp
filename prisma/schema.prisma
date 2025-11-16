@@ -107,6 +107,8 @@ model Organization {
   slug       String        @unique        // Identificador legible para URL (único)
   ownerId    String
   plan       PlanTier      @default(FREE)
+  planExpiresAt DateTime?  // Fecha de expiración cuando se otorga Premium manualmente
+  planUpdatedAt DateTime?  // Última vez que se cambió de plan
   phone      String?
   email      String?
   address    String?

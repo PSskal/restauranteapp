@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { PLAN_LIMITS } from "@/data/plans";
 import { prisma } from "@/lib/prisma";
+import { ensureActivePlan, ensureActivePlans } from "@/lib/plan-expiration";
 
 export async function POST(request: NextRequest) {
   let session;
@@ -162,9 +163,18 @@ export async function GET() {
       },
     });
 
+    const normalizedMemberships = await Promise.all(
+      memberships.map(async (membership) => ({
+        ...membership,
+        org: await ensureActivePlan(membership.org),
+      }))
+    );
+
+    const normalizedOwnedOrgs = await ensureActivePlans(ownedOrgs);
+
     return NextResponse.json({
-      memberships,
-      ownedOrgs,
+      memberships: normalizedMemberships,
+      ownedOrgs: normalizedOwnedOrgs,
     });
   } catch (error) {
     console.error("Error fetching organizations:", error);

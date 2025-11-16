@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PlanTier } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { ensureActivePlan } from "@/lib/plan-expiration";
 
 export async function GET(
   _request: NextRequest,
@@ -17,23 +18,27 @@ export async function GET(
       );
     }
 
-    const organization = await prisma.organization.findUnique({
+    const foundOrganization = await prisma.organization.findUnique({
       where: { slug },
       select: {
         id: true,
         name: true,
         plan: true,
+        planExpiresAt: true,
+        planUpdatedAt: true,
       },
     });
 
-    if (!organization) {
+    if (!foundOrganization) {
       return NextResponse.json(
         { error: "Restaurante no encontrado" },
         { status: 404 }
       );
     }
 
-    if (organization.plan !== PlanTier.PREMIUM) {
+    const organization = await ensureActivePlan(foundOrganization);
+
+    if (!organization || organization.plan !== PlanTier.PREMIUM) {
       return NextResponse.json(
         { error: "Este restaurante no tiene su carta pública activa" },
         { status: 403 }
@@ -93,4 +98,3 @@ export async function GET(
     );
   }
 }
-

@@ -67,6 +67,8 @@ CREATE TABLE "public"."Organization" (
     "slug" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
     "plan" "public"."PlanTier" NOT NULL DEFAULT 'FREE',
+    "planExpiresAt" TIMESTAMP(3),
+    "planUpdatedAt" TIMESTAMP(3),
     "phone" TEXT,
     "email" TEXT,
     "address" TEXT,

@@ -7,5 +7,6 @@ export const config = {
     "/api/organizations/:path*",
     "/api/invitations/:path*",
     "/api/upload/:path*",
+    "/api/admin/:path*",
   ],
 };

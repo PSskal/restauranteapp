@@ -24,6 +24,7 @@ export default async function Home() {
       active: true,
       org: {
         plan: PlanTier.PREMIUM,
+        OR: [{ planExpiresAt: null }, { planExpiresAt: { gt: new Date() } }],
       },
     },
     include: {

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureActivePlan, ensureActivePlans } from "@/lib/plan-expiration";
 import {
   Card,
   CardContent,
@@ -22,7 +23,7 @@ export default async function DashboardPage() {
   // La creación del usuario se maneja en el callback de auth.ts
 
   // Buscar organizaciones del usuario de forma simplificada
-  const userMemberships = await prisma.membership.findMany({
+  const rawMemberships = await prisma.membership.findMany({
     where: {
       userId: session.user.id,
     },
@@ -31,15 +32,24 @@ export default async function DashboardPage() {
     },
   });
 
+  const userMemberships = await Promise.all(
+    rawMemberships.map(async (membership) => ({
+      ...membership,
+      org: await ensureActivePlan(membership.org),
+    }))
+  );
+
   // Buscar organizaciones propias (como owner)
-  const ownedOrgs = await prisma.organization.findMany({
+  const rawOwnedOrgs = await prisma.organization.findMany({
     where: {
       ownerId: session.user.id,
     },
   });
 
+  const normalizedOwnedOrgs = await ensureActivePlans(rawOwnedOrgs);
+
   // Combinar todas las organizaciones
-  const allOrgs = [...ownedOrgs, ...userMemberships.map((m) => m.org)];
+  const allOrgs = [...normalizedOwnedOrgs, ...userMemberships.map((m) => m.org)];
 
   // Remover duplicados
   const uniqueOrgs = allOrgs.filter(
@@ -92,7 +102,9 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">{org.name}</CardTitle>
                 <Badge variant="secondary">
-                  {ownedOrgs.some((o) => o.id === org.id) ? "Owner" : "Member"}
+                  {normalizedOwnedOrgs.some((o) => o.id === org.id)
+                    ? "Owner"
+                    : "Member"}
                 </Badge>
               </div>
               <CardDescription>Slug: {org.slug}</CardDescription>
@@ -124,7 +136,9 @@ export default async function DashboardPage() {
             <div className="h-4 w-4">👑</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ownedOrgs.length}</div>
+            <div className="text-2xl font-bold">
+              {normalizedOwnedOrgs.length}
+            </div>
           </CardContent>
         </Card>
 

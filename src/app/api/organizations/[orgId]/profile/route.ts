@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureActivePlan } from "@/lib/plan-expiration";
 
 const TIME_REGEX = /^([0-1]\d|2[0-3]):[0-5]\d$/;
 
@@ -60,6 +61,8 @@ const profileSelect = {
   name: true,
   slug: true,
   plan: true,
+  planExpiresAt: true,
+  planUpdatedAt: true,
   phone: true,
   email: true,
   address: true,
@@ -102,7 +105,8 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const organization = await ensureOwner(orgId);
+    const rawOrganization = await ensureOwner(orgId);
+    const organization = await ensureActivePlan(rawOrganization);
 
     if (!organization) {
       return NextResponse.json(
@@ -258,6 +262,8 @@ export async function PATCH(
       });
     }
 
+    updatedOrganization = await ensureActivePlan(updatedOrganization);
+
     if (!updatedOrganization) {
       return NextResponse.json(
         { error: "Restaurante no encontrado" },
@@ -305,6 +311,7 @@ export async function PATCH(
         where: { id: orgId },
         select: profileSelect,
       });
+      updatedOrganization = await ensureActivePlan(updatedOrganization);
     }
 
     return NextResponse.json({ organization: updatedOrganization });

@@ -4,14 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import {
+  ArrowRight,
   BarChart3,
-  ChefHat,
   Clock,
   Globe,
   QrCode,
   RefreshCw,
   ShieldCheck,
-  Smartphone,
   Sparkles,
   Star,
   Zap,
@@ -68,7 +67,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50">
       <section className="bg-white">
-        <div className="mx-auto w-full max-w-7xl px-4 md:px-8 ">
+        <div className="mx-auto w-full max-w-7xl px-4 md:px-8 py-10">
           <div className="flex flex-col items-start text-left max-w-4xl">
             {/* Trust badges arriba */}
             <div className="flex flex-wrap items-center gap-3 text-sm">

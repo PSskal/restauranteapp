@@ -98,7 +98,7 @@ export function Navbar() {
                   asChild
                   className={navigationMenuTriggerStyle()}
                 >
-                  <Link href="/#features">Características</Link>
+                  <Link href="/features">Características</Link>
                 </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>

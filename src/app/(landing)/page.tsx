@@ -1,119 +1,30 @@
 "use client";
 
-import { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import {
-  ArrowRight,
   BarChart3,
-  CheckCircle2,
   ChefHat,
   Clock,
   Globe,
-  LucideIcon,
-  PanelsTopLeft,
   QrCode,
   RefreshCw,
   ShieldCheck,
   Smartphone,
   Sparkles,
   Star,
-  Users,
   Zap,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Navbar } from "@/components/landing/navbar";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-
-const metadata: Metadata = {
-  title: "PSskal | Sistema integral para restaurantes modernos",
-  description:
-    "Centraliza tu operación gastronómica con menús digitales, POS, gestión de pedidos y analítica en una sola plataforma lista para conquistar a tus comensales.",
-};
-
-type Benefit = {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  highlight?: string;
-};
-
-const restaurantBenefits: Benefit[] = [
-  {
-    title: "Menú digital y QR automatizado",
-    description:
-      "Activa o pausa platos desde el POS y sincroniza la carta pública en segundos. Se acabaron las impresiones y los desajustes.",
-    icon: Smartphone,
-  },
-  {
-    title: "Pedidos, cocina y salón conectados",
-    description:
-      "POS, comandas y vista de cocina trabajan juntos para reducir tiempos muertos y errores en la operación.",
-    icon: PanelsTopLeft,
-  },
-  {
-    title: "Reportes para tomar decisiones",
-    description:
-      "Monitorea ventas, platos más rentables y desempeño por horario desde cualquier dispositivo.",
-    icon: Sparkles,
-  },
-];
-
-const dinerBenefits: Benefit[] = [
-  {
-    title: "Carta en vivo",
-    description:
-      "Los comensales solo ven lo que realmente está disponible y pueden descubrir nuevos platos sin preguntar.",
-    icon: ChefHat,
-    highlight: "Experiencia sin fricción",
-  },
-  {
-    title: "Pedidos directos",
-    description:
-      "El enlace público funciona como embudo: descubre, agrega al pedido y llega listo a tu salón.",
-    icon: ArrowRight,
-    highlight: "Convierte visitas en ventas",
-  },
-  {
-    title: "Comunicación clara",
-    description:
-      "Fotos, descripciones y precios actualizados inspiran más confianza y tickets promedio más altos.",
-    icon: Users,
-    highlight: "Clientes informados",
-  },
-];
-
-const funnelSteps: Benefit[] = [
-  {
-    title: "Atrae",
-    description:
-      "Comparte tu landing personalizada y deja que los clientes exploren tu carta digital o reserva desde un QR.",
-    icon: Sparkles,
-    highlight: "Top of funnel",
-  },
-  {
-    title: "Convierte",
-    description:
-      "Integra pedidos, mesas y cocina para que cada interacción termine en pago sin perder información en el camino.",
-    icon: CheckCircle2,
-    highlight: "Middle funnel",
-  },
-  {
-    title: "Fideliza",
-    description:
-      "Analiza datos de consumo y replica lo que funciona con campañas, combos y disponibilidad en tiempo real.",
-    icon: Users,
-    highlight: "Bottom funnel",
-  },
-];
 
 const trustPoints = [
   { label: "Sincronización segura", icon: ShieldCheck },
@@ -156,7 +67,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Navbar />
       <section className="bg-white">
         <div className="mx-auto w-full max-w-7xl px-4 md:px-8 ">
           <div className="flex flex-col items-start text-left max-w-4xl">

@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { Check, Minus } from "lucide-react";
+import Link from "next/link";
 
 import {
   PLAN_CARDS,
@@ -42,7 +43,7 @@ function renderFeatureValue(planId: PlanId, feature: PlanFeatureRow) {
   const value = feature.values[planId];
   if (value.type === "boolean") {
     return value.value ? (
-      <span className="inline-flex items-center gap-2 font-medium text-emerald-500">
+      <span className="inline-flex items-center gap-2 font-medium">
         <Check className="h-4 w-4" /> Incluido
       </span>
     ) : (
@@ -57,16 +58,16 @@ function renderFeatureValue(planId: PlanId, feature: PlanFeatureRow) {
 
 export function PricingSection() {
   return (
-    <section id="planes" className="bg-slate-900 py-20 text-white">
-      <div className="container mx-auto px-4 space-y-12">
+    <section id="planes" className="bg-background py-20">
+      <div className="mx-auto w-full max-w-7xl px-4 md:px-8 space-y-12">
         <div className="text-center space-y-4">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-300">
+          <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
             Planes sugeridos
           </p>
           <h2 className="text-3xl font-semibold md:text-4xl">
             Escala tu restaurante a tu propio ritmo
           </h2>
-          <p className="mx-auto max-w-3xl text-base text-slate-300">
+          <p className="mx-auto max-w-3xl text-base text-muted-foreground">
             Comienza gratis con lo esencial y da el salto a Premium cuando
             necesites branding avanzado, POS completo y reportes con todo el
             detalle que te pide el negocio.
@@ -78,62 +79,82 @@ export function PricingSection() {
             <div
               key={plan.id}
               className={cn(
-                "rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg backdrop-blur",
-                plan.highlight && "ring-2 ring-emerald-300"
+                "rounded-3xl border bg-card p-6 shadow-sm",
+                plan.highlight && "ring-2 ring-foreground"
               )}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm uppercase tracking-widest text-slate-300">
+                  <p className="text-sm uppercase tracking-widest text-muted-foreground">
                     {plan.name}
                   </p>
                   <p className="mt-2 text-4xl font-semibold">
                     {plan.priceLabel}
-                    <span className="ml-1 text-base font-normal text-slate-400">
+                    <span className="ml-1 text-base font-normal text-muted-foreground">
                       /mes
                     </span>
                   </p>
                 </div>
                 {plan.ribbon ? (
-                  <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-100">
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">
                     {plan.ribbon}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-4 text-sm text-slate-300">{plan.description}</p>
-              <ul className="mt-6 space-y-3 text-sm text-slate-200">
+              <p className="mt-4 text-sm text-muted-foreground">
+                {plan.description}
+              </p>
+              <ul className="mt-6 space-y-3 text-sm">
                 {HIGHLIGHTS.map((highlight) => (
                   <li
                     key={`${plan.id}-${highlight.label}`}
-                    className="flex items-center justify-between rounded-xl border border-white/10 px-4 py-3"
+                    className="flex items-center justify-between rounded-xl border px-4 py-3"
                   >
-                    <span className="text-slate-400">{highlight.label}</span>
+                    <span className="text-muted-foreground">
+                      {highlight.label}
+                    </span>
                     <span className="font-semibold">
                       {highlight.format(plan.id)}
                     </span>
                   </li>
                 ))}
               </ul>
-              <Button
-                className={cn(
-                  "mt-6 w-full",
-                  plan.id === "PREMIUM"
-                    ? "bg-emerald-400 text-slate-900 hover:bg-emerald-300"
-                    : "bg-white/10 text-white hover:bg-white/20"
-                )}
-                variant="default"
-              >
-                {plan.id === "FREE"
-                  ? "Empieza gratis"
-                  : "Quiero el plan Premium"}
-              </Button>
+              {plan.id === "FREE" ? (
+                <Button
+                  asChild
+                  className={cn(
+                    "mt-6 w-full",
+                    "bg-muted text-foreground hover:bg-muted/80"
+                  )}
+                  variant="default"
+                >
+                  <Link href="/login">Empieza gratis</Link>
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  className={cn(
+                    "mt-6 w-full",
+                    "bg-foreground text-background hover:bg-foreground/90"
+                  )}
+                  variant="default"
+                >
+                  <Link
+                    href="https://wa.me/51900878539?text=Hola,%20quiero%20el%20plan%20Premium%20de%20PSskal"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Quiero el plan Premium
+                  </Link>
+                </Button>
+              )}
             </div>
           ))}
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+        <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <div className="mb-6">
-            <p className="text-sm font-semibold text-emerald-200">
+            <p className="text-sm font-semibold text-muted-foreground">
               Comparativa detallada
             </p>
             <p className="text-2xl font-semibold">
@@ -141,9 +162,9 @@ export function PricingSection() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-200">
+            <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
+                <tr className="border-b text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="py-3 pr-4 font-semibold">Característica</th>
                   <th className="py-3 pr-4 font-semibold">Free</th>
                   <th className="py-3 pr-4 font-semibold">Premium</th>
@@ -155,7 +176,7 @@ export function PricingSection() {
                     <tr>
                       <td
                         colSpan={3}
-                        className="pt-6 pb-2 text-xs font-semibold uppercase tracking-widest text-emerald-200"
+                        className="pt-6 pb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                       >
                         {section.category}
                       </td>
@@ -163,9 +184,9 @@ export function PricingSection() {
                     {section.features.map((feature) => (
                       <tr
                         key={feature.key}
-                        className="border-b border-white/5 last:border-0"
+                        className="border-b border-border last:border-0"
                       >
-                        <td className="py-3 pr-4 font-medium text-white">
+                        <td className="py-3 pr-4 font-medium">
                           {feature.label}
                         </td>
                         <td className="py-3 pr-4">

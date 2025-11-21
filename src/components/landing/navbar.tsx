@@ -131,7 +131,7 @@ export function Navbar() {
             <Link href="/login">Iniciar Sesión</Link>
           </Button>
           <Button className="rounded-full" size="sm" asChild>
-            <Link href="/register">Empezar Gratis</Link>
+            <Link href="/login">Empezar Gratis</Link>
           </Button>
         </div>
       </div>

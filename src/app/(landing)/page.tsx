@@ -411,6 +411,184 @@ export default function Home() {
           </div>
         </div>
       </section> */}
+
+      {/* Sección Visión - Lo que viene */}
+      <section className="bg-muted py-24">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="text-center mb-16">
+            <Badge
+              variant="outline"
+              className="mb-4 border-border bg-background"
+            >
+              Construyendo el futuro
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+              La primera plataforma en Latam que eliminará las comisiones del
+              30%
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+              Hoy digitalizamos tu restaurante. Mañana, revolucionamos toda la
+              industria gastronómica.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 mb-12">
+            {/* Card 1: Sistema completo */}
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="bg-muted w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                <Zap className="h-6 w-6 text-foreground" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-3">
+                Sistema propio de delivery
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Red inteligente tipo Uber Eats pero{" "}
+                <span className="text-foreground font-semibold">
+                  sin comisiones del 30%
+                </span>
+                . Tus clientes piden directo, tú controlas todo.
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Mapa inteligente con tracking en tiempo real</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Red de repartidores independientes o propios</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>El restaurante se queda con el 100% del valor</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Card 2: IA Predictiva */}
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="bg-muted w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                <Sparkles className="h-6 w-6 text-foreground" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-3">
+                IA que optimiza tu operación
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Inteligencia artificial que aprende de tu restaurante y toma
+                decisiones que{" "}
+                <span className="text-foreground font-semibold">
+                  aumentan tus ganancias
+                </span>
+                .
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Predice demanda diaria y sugiere compras exactas</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Ajusta precios según competencia y demanda</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>
+                    Automatiza promociones en horarios de baja demanda
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>
+                    Reduce desperdicio hasta 40% con alertas predictivas
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Card 3: Cocina aumentada */}
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="bg-muted w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                <Clock className="h-6 w-6 text-foreground" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-3">
+                Cocina aumentada
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Tu cocina funciona como una{" "}
+                <span className="text-foreground font-semibold">
+                  fábrica inteligente
+                </span>
+                : cero platos atrasados, cero merma invisible.
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Alertas automáticas de platos retrasados</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Control de merma en tiempo real por ingrediente</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Optimización de tiempos de preparación</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Card 4: Red B2B */}
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="bg-muted w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                <RefreshCw className="h-6 w-6 text-foreground" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-3">
+                Integración con proveedores
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Red B2B directa:{" "}
+                <span className="text-foreground font-semibold">
+                  compras automatizadas
+                </span>
+                , mejores precios, entrega sincronizada con tu demanda.
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Pedidos automáticos según stock y predicciones</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Comparador de precios entre proveedores</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-foreground mt-0.5">→</span>
+                  <span>Trazabilidad completa de ingredientes</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* CTA final minimalista */}
+          <div className="bg-card border border-border rounded-2xl p-8 md:p-12 text-center">
+            <h3 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              No estamos mejorando la industria. La estamos reescribiendo.
+            </h3>
+            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Únete ahora y sé parte de los primeros restaurantes en Latam que
+              operan sin intermediarios costosos.
+            </p>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <Button size="lg" asChild>
+                <Link href="/login">
+                  Empieza gratis <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/features">Ver todas las características</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

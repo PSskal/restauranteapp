@@ -188,12 +188,58 @@ export default async function DashboardPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href={`/${selectedOrg.slug}/dashboard/pos`}>
+          <Link href={`/dashboard/pos`}>
             <ShoppingBag className="mr-2 h-4 w-4" />
             Nuevo Pedido
           </Link>
         </Button>
       </div>
+
+      {/* Accesos rápidos */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Accesos Rápidos</CardTitle>
+          <CardDescription>
+            Navega a las secciones más importantes
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Button variant="outline" className="h-20" asChild>
+              <Link href={`/dashboard/pos`}>
+                <div className="flex flex-col items-center gap-2">
+                  <CreditCard className="h-6 w-6" />
+                  <span>Punto de Venta</span>
+                </div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-20" asChild>
+              <Link href={`/dashboard/cocina`}>
+                <div className="flex flex-col items-center gap-2">
+                  <ChefHat className="h-6 w-6" />
+                  <span>Vista Cocina</span>
+                </div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-20" asChild>
+              <Link href={`/dashboard/mesas`}>
+                <div className="flex flex-col items-center gap-2">
+                  <Users className="h-6 w-6" />
+                  <span>Gestionar Mesas</span>
+                </div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-20" asChild>
+              <Link href={`/dashboard/reportes`}>
+                <div className="flex flex-col items-center gap-2">
+                  <TrendingUp className="h-6 w-6" />
+                  <span>Reportes</span>
+                </div>
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Métricas principales */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -332,52 +378,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Accesos rápidos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Accesos Rápidos</CardTitle>
-          <CardDescription>
-            Navega a las secciones más importantes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Button variant="outline" className="h-20" asChild>
-              <Link href={`/dashboard/pos`}>
-                <div className="flex flex-col items-center gap-2">
-                  <CreditCard className="h-6 w-6" />
-                  <span>Punto de Venta</span>
-                </div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-20" asChild>
-              <Link href={`/dashboard/cocina`}>
-                <div className="flex flex-col items-center gap-2">
-                  <ChefHat className="h-6 w-6" />
-                  <span>Vista Cocina</span>
-                </div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-20" asChild>
-              <Link href={`/dashboard/mesas`}>
-                <div className="flex flex-col items-center gap-2">
-                  <Users className="h-6 w-6" />
-                  <span>Gestionar Mesas</span>
-                </div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-20" asChild>
-              <Link href={`/dashboard/reportes`}>
-                <div className="flex flex-col items-center gap-2">
-                  <TrendingUp className="h-6 w-6" />
-                  <span>Reportes</span>
-                </div>
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Estado del plan */}
       <Card>

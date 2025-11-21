@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -32,7 +32,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ChefHat, Upload, X } from "lucide-react";
+import { Loader2, ChefHat, Upload, X, Image as ImageIcon } from "lucide-react";
 
 const formSchema = z.object({
   name: z
@@ -76,43 +76,29 @@ export function CreateMenuItemModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Función para manejar la selección de archivo
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validar que sea imagen
-      if (!file.type.startsWith("image/")) {
-        toast.error("Solo se permiten archivos de imagen");
-        return;
-      }
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
 
-      // Validar tamaño (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("La imagen excede el tamaño máximo de 5MB");
-        return;
-      }
-
-      setSelectedFile(file);
-
-      // Crear preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    // Validar tipo de archivo
+    if (!file.type.startsWith("image/")) {
+      toast.error("El archivo debe ser una imagen");
+      return;
     }
-  };
 
-  // Función para subir imagen a Vercel Blob
-  const uploadImage = async (): Promise<string | null> => {
-    if (!selectedFile) return null;
+    // Validar tamaño (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no debe superar los 5MB");
+      return;
+    }
 
     setIsUploadingImage(true);
+    toast.info("📊 Subiendo imagen...");
+
     try {
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file", file);
       formData.append("orgId", organizationId);
 
       const response = await fetch("/api/upload/image", {
@@ -121,62 +107,38 @@ export function CreateMenuItemModal({
       });
 
       if (!response.ok) {
-        // Intentar obtener el mensaje de error del servidor
-        let errorMessage = "Error al subir imagen";
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          // Si no se puede parsear el JSON, usar mensaje genérico
-          errorMessage = `Error ${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
+        const error = await response.json();
+        throw new Error(error.error || "Error al subir la imagen");
       }
 
-      const { url } = await response.json();
-      return url;
+      const data = await response.json();
+      form.setValue("imageUrl", data.url);
+      setImagePreview(data.url);
+      toast.success("Imagen subida correctamente");
     } catch (error) {
       console.error("Error uploading image:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Error al subir la imagen";
       toast.error("Error al subir la imagen", {
-        description: errorMessage,
+        description:
+          error instanceof Error ? error.message : "Inténtalo de nuevo",
       });
-      return null;
     } finally {
       setIsUploadingImage(false);
     }
   };
 
-  // Función para remover imagen seleccionada
-  const removeSelectedImage = () => {
-    setSelectedFile(null);
-    setImagePreview(null);
+  const handleRemoveImage = () => {
     form.setValue("imageUrl", "");
-
-    // También resetear el input de archivo
-    const fileInput = document.getElementById(
-      "file-upload"
-    ) as HTMLInputElement;
-    if (fileInput) {
-      fileInput.value = "";
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
-
-    toast.success("Imagen eliminada");
   };
 
-  // Función para limpiar completamente el modal
   const resetModal = () => {
     form.reset();
-    setSelectedFile(null);
     setImagePreview(null);
-
-    // Resetear el input de archivo
-    const fileInput = document.getElementById(
-      "file-upload"
-    ) as HTMLInputElement;
-    if (fileInput) {
-      fileInput.value = "";
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -194,15 +156,6 @@ export function CreateMenuItemModal({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
-      // Subir imagen si hay una seleccionada
-      let imageUrl = values.imageUrl || "";
-      if (selectedFile) {
-        const uploadedUrl = await uploadImage();
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
-        }
-      }
-
       const response = await fetch(
         `/api/organizations/${organizationId}/menu-items`,
         {
@@ -215,7 +168,7 @@ export function CreateMenuItemModal({
             price: parseFloat(values.price),
             categoryId: values.categoryId,
             description: values.description || undefined,
-            imageUrl: imageUrl || undefined,
+            imageUrl: values.imageUrl || undefined,
             active: true,
           }),
         }
@@ -365,70 +318,69 @@ export function CreateMenuItemModal({
               name="imageUrl"
               render={() => (
                 <FormItem>
-                  <FormLabel>Imagen del producto</FormLabel>
+                  <FormLabel>Imagen del producto (opcional)</FormLabel>
                   <FormControl>
                     <div className="space-y-4">
-                      {/* Opción 1: Subir archivo */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          Subir desde tu computadora
-                        </label>
-                        <div className="flex items-center gap-4">
+                      {imagePreview ? (
+                        <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
+                          <Image
+                            src={imagePreview}
+                            alt="Preview del producto"
+                            fill
+                            className="object-cover"
+                          />
                           <Button
                             type="button"
-                            variant="outline"
-                            onClick={() =>
-                              document.getElementById("file-upload")?.click()
-                            }
+                            variant="destructive"
+                            size="icon"
+                            className="absolute right-2 top-2"
+                            onClick={handleRemoveImage}
                             disabled={isLoading || isUploadingImage}
-                            className="flex items-center gap-2"
                           >
-                            <Upload className="h-4 w-4" />
-                            {selectedFile
-                              ? "Cambiar imagen"
-                              : "Seleccionar imagen"}
+                            <X className="h-4 w-4" />
                           </Button>
-                          <input
-                            id="file-upload"
-                            type="file"
-                            accept="image/*"
-                            onChange={handleFileSelect}
-                            className="hidden"
-                          />
-                          {selectedFile && (
-                            <span className="text-sm text-green-600 flex items-center gap-1">
-                              ✓ Imagen seleccionada
-                            </span>
-                          )}
                         </div>
-
-                        {/* Preview de imagen seleccionada */}
-                        {imagePreview && (
-                          <div className="mt-4 relative inline-block">
-                            <Image
-                              src={imagePreview}
-                              alt="Preview"
-                              width={200}
-                              height={150}
-                              className="rounded-lg object-cover border"
-                            />
-                            {/* Botón de eliminar sobre la imagen */}
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={removeSelectedImage}
-                              disabled={isLoading || isUploadingImage}
-                              className="absolute top-2 right-2 h-8 w-8 p-0"
-                              title="Eliminar imagen"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                            <p className="text-xs text-gray-500 mt-2">
-                              Haz clic en la X para eliminar esta imagen
+                      ) : (
+                        <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-8">
+                          <div className="text-center">
+                            <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              Sin imagen
                             </p>
                           </div>
-                        )}
+                        </div>
+                      )}
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file);
+                          }}
+                          disabled={isLoading || isUploadingImage}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isLoading || isUploadingImage}
+                        >
+                          {isUploadingImage ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Subiendo...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="mr-2 h-4 w-4" />
+                              {imagePreview ? "Cambiar imagen" : "Subir imagen"}
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
                   </FormControl>

@@ -185,7 +185,6 @@ export async function POST(
       const result = await resend.emails.send({
         from,
         to: normalizedEmail,
-        reply_to: "ricpascual29@gmail.com", // Las respuestas irán aquí
         subject: `Invitación a ${organization.name}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">

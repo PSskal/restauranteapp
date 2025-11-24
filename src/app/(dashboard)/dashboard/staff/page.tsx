@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import { requireRole, PERMISSIONS } from "@/lib/permissions";

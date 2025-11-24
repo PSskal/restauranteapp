@@ -101,7 +101,7 @@ const quickActions = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session } = useSession();
-  const { organizations, currentOrg, userRole } = useOrganization();
+  const { organizations, userRole } = useOrganization();
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase();
   const isAdmin =
     !!adminEmail && session?.user?.email?.toLowerCase() === adminEmail;
@@ -117,8 +117,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       // Mesas - OWNER, MANAGER, CASHIER, WAITER
       if (item.url === "/dashboard/mesas") {
-        return [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WAITER].includes(
-          userRole as Role
+        return (
+          userRole &&
+          (
+            [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WAITER] as Role[]
+          ).includes(userRole)
         );
       }
 
@@ -165,20 +168,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return quickActions.filter((action) => {
       // Reportes - solo OWNER y MANAGER
       if (action.url === "/dashboard/reportes") {
-        return [Role.OWNER, Role.MANAGER].includes(userRole as Role);
+        return (
+          userRole && ([Role.OWNER, Role.MANAGER] as Role[]).includes(userRole)
+        );
       }
 
       // POS - OWNER, MANAGER, CASHIER, WAITER
       if (action.url === "/dashboard/pos") {
-        return [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WAITER].includes(
-          userRole as Role
+        return (
+          userRole &&
+          (
+            [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WAITER] as Role[]
+          ).includes(userRole)
         );
       }
 
       // Cocina - OWNER, MANAGER, CASHIER, KITCHEN
       if (action.url === "/dashboard/cocina") {
-        return [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.KITCHEN].includes(
-          userRole as Role
+        return (
+          userRole &&
+          (
+            [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.KITCHEN] as Role[]
+          ).includes(userRole)
         );
       }
 

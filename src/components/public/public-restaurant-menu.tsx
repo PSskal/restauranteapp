@@ -88,10 +88,11 @@ export function PublicRestaurantMenu({
     const base =
       typeof window !== "undefined"
         ? window.location.origin
-        : process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+        : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "");
     return `${base}/${restaurant.slug}`;
   });
   const [isSending, setIsSending] = useState(false);
+  const [showMobileCart, setShowMobileCart] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -140,10 +141,12 @@ export function PublicRestaurantMenu({
 
   const totalCents = useMemo(
     () =>
-      cart.reduce(
-        (acc, entry) => acc + entry.priceCents * entry.quantity,
-        0
-      ),
+      cart.reduce((acc, entry) => acc + entry.priceCents * entry.quantity, 0),
+    [cart]
+  );
+
+  const totalItems = useMemo(
+    () => cart.reduce((acc, entry) => acc + entry.quantity, 0),
     [cart]
   );
 
@@ -307,7 +310,8 @@ export function PublicRestaurantMenu({
           </Card>
         </div>
 
-        <div className="space-y-6 lg:sticky lg:top-6">
+        {/* Desktop Cart */}
+        <div className="hidden lg:block space-y-6 lg:sticky lg:top-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -319,7 +323,7 @@ export function PublicRestaurantMenu({
                   Revisa los platos elegidos antes de enviar.
                 </CardDescription>
               </div>
-              <Badge variant="outline">{cart.length} ítems</Badge>
+              <Badge variant="outline">{totalItems} ítems</Badge>
             </CardHeader>
             <CardContent className="space-y-4">
               {cart.length === 0 ? (
@@ -396,7 +400,9 @@ export function PublicRestaurantMenu({
                 }}
               >
                 <Send className="mr-2 h-4 w-4" />
-                {isSending ? "Abriendo WhatsApp..." : "Enviar pedido por WhatsApp"}
+                {isSending
+                  ? "Abriendo WhatsApp..."
+                  : "Enviar pedido por WhatsApp"}
               </Button>
 
               {!restaurant.whatsappOrderingEnabled ? (
@@ -436,8 +442,161 @@ export function PublicRestaurantMenu({
             </CardContent>
           </Card>
         </div>
+
+        {/* Mobile Cart Button */}
+        <div className="lg:hidden">
+          <Button
+            className="fixed bottom-4 right-4 z-40 rounded-full shadow-lg"
+            size="lg"
+            onClick={() => setShowMobileCart(true)}
+            style={{
+              backgroundColor: brandColor,
+              borderColor: brandColor,
+              color: "#ffffff",
+            }}
+          >
+            <ShoppingCart className="h-5 w-5 mr-2" />
+            {totalItems > 0 && (
+              <span
+                className="text-xs rounded-full h-5 w-5 flex items-center justify-center ml-1 font-bold"
+                style={{
+                  backgroundColor: "#ffffff",
+                  color: brandColor,
+                }}
+              >
+                {totalItems}
+              </span>
+            )}
+          </Button>
+        </div>
+
+        {/* Mobile Cart Modal */}
+        {showMobileCart && (
+          <div
+            className="lg:hidden fixed inset-0 z-50 bg-black/50"
+            onClick={() => setShowMobileCart(false)}
+          >
+            <div
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85vh] overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
+
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      <ShoppingCart className="h-5 w-5 text-slate-500" />
+                      Tu pedido
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Revisa los platos elegidos antes de enviar.
+                    </p>
+                  </div>
+                  <Badge variant="outline">{totalItems} ítems</Badge>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  {cart.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">
+                      No hay productos en el carrito
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {cart.map((entry) => (
+                        <div
+                          key={entry.menuItemId}
+                          className="flex items-start justify-between rounded-lg border border-slate-200 p-3 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium text-slate-900">
+                              {entry.quantity}x {entry.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {formatPrice(entry.priceCents)} c/u
+                            </p>
+                          </div>
+                          <p className="font-semibold text-slate-900">
+                            {formatPrice(entry.priceCents * entry.quantity)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {cart.length > 0 && (
+                  <>
+                    <div className="space-y-2 mb-4">
+                      <label
+                        htmlFor="mobile-customer-name"
+                        className="text-sm font-medium text-slate-700"
+                      >
+                        Tu nombre (opcional)
+                      </label>
+                      <Input
+                        id="mobile-customer-name"
+                        placeholder="¿Quién realizará el pedido?"
+                        value={customerName}
+                        onChange={(event) =>
+                          setCustomerName(event.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <label
+                        htmlFor="mobile-order-notes"
+                        className="text-sm font-medium text-slate-700"
+                      >
+                        Notas para el restaurante
+                      </label>
+                      <Textarea
+                        id="mobile-order-notes"
+                        placeholder="Ej: sin picante, entregar por delivery..."
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 mb-4">
+                      <span>Total estimado</span>
+                      <span>{formatPrice(totalCents)}</span>
+                    </div>
+
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        handleSendWhatsApp();
+                        setShowMobileCart(false);
+                      }}
+                      disabled={!canSend || isSending}
+                      style={{
+                        backgroundColor: brandColor,
+                        borderColor: brandColor,
+                        color: "#ffffff",
+                      }}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      {isSending ? "Abriendo WhatsApp..." : "Enviar pedido"}
+                    </Button>
+
+                    {!restaurant.whatsappOrderingEnabled && (
+                      <Alert variant="destructive" className="mt-4">
+                        <AlertTitle>Pedidos no disponibles</AlertTitle>
+                        <AlertDescription>
+                          Este restaurante aún no recibe pedidos por WhatsApp.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
 }
-

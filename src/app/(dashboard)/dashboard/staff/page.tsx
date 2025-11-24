@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, Mail, Crown, Shield, User } from "lucide-react";
 import { InviteStaffDialog } from "@/components/staff/invite-staff-dialog";
 import { PendingInvitationActions } from "@/components/staff/pending-invitation-actions";
+import { MemberActions } from "@/components/staff/member-actions";
 
 export default async function StaffPage() {
   // Verificar autenticación
@@ -103,7 +104,6 @@ export default async function StaffPage() {
   );
   const canManageStaff = isOwner || userMembership?.role === "MANAGER";
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getRoleColor = (role: string) => {
     switch (role) {
       case "OWNER":
@@ -230,9 +230,9 @@ export default async function StaffPage() {
         <CardContent>
           <div className="space-y-4">
             {/* Owner siempre aparece primero */}
-            <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                   {currentOrg.owner.image ? (
                     <Image
                       src={currentOrg.owner.image}
@@ -242,27 +242,37 @@ export default async function StaffPage() {
                       height={40}
                     />
                   ) : (
-                    <Crown className="h-5 w-5 text-gray-600" />
+                    <Crown className="h-5 w-5 text-blue-600" />
                   )}
                 </div>
                 <div>
                   <div className="font-medium">
                     {currentOrg.owner.name || "Sin nombre"}
+                    {currentOrg.owner.id === session.user?.id && (
+                      <span className="text-sm text-muted-foreground ml-2">
+                        (Tú)
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {currentOrg.owner.email}
                   </div>
                 </div>
               </div>
+              <Badge className="bg-blue-600">
+                <Crown className="h-3 w-3 mr-1" />
+                Propietario
+              </Badge>
             </div>
 
             {/* Otros miembros */}
             {currentOrg.memberships.map((membership) => {
               const RoleIcon = getRoleIcon(membership.role);
+              const isCurrentUser = membership.userId === session.user?.id;
               return (
                 <div
                   key={membership.id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
@@ -281,11 +291,34 @@ export default async function StaffPage() {
                     <div>
                       <div className="font-medium">
                         {membership.user.name || "Sin nombre"}
+                        {isCurrentUser && (
+                          <span className="text-sm text-muted-foreground ml-2">
+                            (Tú)
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {membership.user.email}
                       </div>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={getRoleColor(membership.role)}>
+                      <RoleIcon className="h-3 w-3 mr-1" />
+                      {getRoleText(membership.role)}
+                    </Badge>
+                    {canManageStaff && !isCurrentUser && (
+                      <MemberActions
+                        orgId={currentOrg.id}
+                        membership={{
+                          id: membership.id,
+                          userId: membership.userId,
+                          userName: membership.user.name || "Sin nombre",
+                          userEmail: membership.user.email || "",
+                          role: membership.role,
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               );
@@ -315,12 +348,15 @@ export default async function StaffPage() {
                     <div>
                       <div className="font-medium">{invitation.email}</div>
                       <div className="text-sm text-muted-foreground">
-                        Invitado como {getRoleText(invitation.role)} • Expira:{" "}
+                        Rol: {getRoleText(invitation.role)} • Expira:{" "}
                         {new Date(invitation.expiresAt).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <Badge variant={getRoleColor(invitation.role)}>
+                      {getRoleText(invitation.role)}
+                    </Badge>
                     <Badge
                       variant="outline"
                       className="text-orange-600 border-orange-300"

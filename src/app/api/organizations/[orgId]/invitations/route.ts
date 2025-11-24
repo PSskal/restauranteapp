@@ -176,41 +176,41 @@ export async function POST(
       const inviteUrl = buildInviteLink(token);
       const roleName = role.charAt(0) + role.slice(1).toLowerCase();
 
-      // Usar tu email para testing hasta que passkal.com se propague completamente
-      // Sin dominio verificado, solo puedes enviar a tu propio email
-      const finalToEmail =
-        normalizedEmail !== "ricpascual29@gmail.com"
-          ? "ricpascual29@gmail.com"
-          : normalizedEmail;
-
-      console.log("Enviando correo con Resend:", {
+      console.log("Enviando invitación con Resend:", {
         from,
-        to: finalToEmail,
-        originalTo: normalizedEmail,
-        subject: `Invitacion a ${organization.name}`,
-        domain: "onboarding@resend.dev (temporary fallback)",
+        to: normalizedEmail,
+        subject: `Invitación a ${organization.name}`,
       });
 
       const result = await resend.emails.send({
         from,
-        to: finalToEmail,
-        subject: `Invitacion a ${organization.name}`,
+        to: normalizedEmail,
+        reply_to: "ricpascual29@gmail.com", // Las respuestas irán aquí
+        subject: `Invitación a ${organization.name}`,
         html: `
-          <p>Hola,</p>
-          ${finalToEmail !== normalizedEmail ? `<p><strong>📧 NOTA:</strong> Esta invitación era para <code>${normalizedEmail}</code></p>` : ""}
-          <p>Te han invitado a unirte al restaurante <strong>${organization.name}</strong> como <strong>${roleName}</strong>.</p>
-          <p>Haz clic en el siguiente boton para aceptar la invitacion:</p>
-          <p>
-            <a href="${inviteUrl}" style="display:inline-block;padding:10px 16px;background-color:#111827;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600">
-              Aceptar invitacion
-            </a>
-          </p>
-          <p>Este enlace expira el ${expiresAt.toLocaleDateString()}.</p>
-          <p>Si no esperabas esta invitacion, puedes ignorar este correo.</p>
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Invitación a ${organization.name}</h2>
+            <p>Hola,</p>
+            <p>Te han invitado a unirte al restaurante <strong>${organization.name}</strong> como <strong>${roleName}</strong>.</p>
+            <p>Haz clic en el siguiente botón para aceptar la invitación:</p>
+            <p style="margin: 24px 0;">
+              <a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background-color:#111827;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">
+                Aceptar invitación
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">O copia este enlace en tu navegador:</p>
+            <p style="color: #666; font-size: 14px; word-break: break-all;">${inviteUrl}</p>
+            <p style="color: #999; font-size: 12px; margin-top: 32px;">Este enlace expira el ${expiresAt.toLocaleDateString("es-PE", { dateStyle: "long" })}.</p>
+            <p style="color: #999; font-size: 12px;">Si no esperabas esta invitación, puedes ignorar este correo.</p>
+          </div>
         `,
         text: `Has sido invitado a ${organization.name} como ${roleName}.
-Acepta la invitacion visitando: ${inviteUrl}
-El enlace expira el ${expiresAt.toLocaleDateString()}`,
+
+Acepta la invitación visitando: ${inviteUrl}
+
+El enlace expira el ${expiresAt.toLocaleDateString("es-PE", { dateStyle: "long" })}
+
+Si no esperabas esta invitación, puedes ignorar este correo.`,
       });
 
       console.log("Resend result:", result);

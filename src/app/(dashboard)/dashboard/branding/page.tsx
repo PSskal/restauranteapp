@@ -1,13 +1,9 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { requireRole, PERMISSIONS } from "@/lib/permissions";
 import { BrandingSettingsClient } from "@/components/settings/branding-settings-client";
 
 export default async function DashboardBrandingPage() {
-  const session = await auth();
-
-  if (!session) {
-    redirect("/auth/signin");
-  }
+  // Solo OWNER puede gestionar branding
+  await requireRole(PERMISSIONS.BRANDING);
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -16,7 +12,8 @@ export default async function DashboardBrandingPage() {
           Branding del Restaurante
         </h1>
         <p className="text-sm text-muted-foreground">
-          Personaliza los colores y el logotipo que verán tus clientes en la carta con QR.
+          Personaliza los colores y el logotipo que verán tus clientes en la
+          carta con QR.
         </p>
       </div>
       <BrandingSettingsClient />

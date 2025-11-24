@@ -1,14 +1,9 @@
-import { redirect } from "next/navigation";
-
-import { auth } from "@/auth";
+import { requireRole, PERMISSIONS } from "@/lib/permissions";
 import { KitchenDashboard } from "@/components/orders/kitchen-dashboard";
 
 export default async function CocinaPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  // OWNER, MANAGER, CASHIER y KITCHEN pueden ver cocina
+  await requireRole(PERMISSIONS.KITCHEN);
 
   return <KitchenDashboard />;
 }

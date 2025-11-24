@@ -9,6 +9,7 @@ import {
   ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
+import { Role } from "@prisma/client";
 
 import type { PlanId } from "@/data/plans";
 
@@ -35,7 +36,7 @@ interface Membership {
   id: string;
   userId: string;
   orgId: string;
-  role: string;
+  role: Role;
   org: Organization;
 }
 
@@ -45,6 +46,7 @@ interface OrganizationContextType {
   setCurrentOrg: (org: Organization) => void;
   isLoading: boolean;
   isOwner: boolean;
+  userRole: Role | null;
   refreshOrganizations: () => Promise<void>;
 }
 
@@ -60,6 +62,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
   const { data: session } = useSession();
   const [currentOrg, setCurrentOrgState] = useState<Organization | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchOrganizations = useCallback(async () => {
@@ -86,6 +89,9 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
         ...data.ownedOrgs,
         ...data.memberships.map((m: Membership) => m.org),
       ];
+
+      // Guardar memberships para obtener el rol
+      setMemberships(data.memberships);
 
       const uniqueOrgs = allOrgs.filter(
         (org: Organization, index: number, self: Organization[]) =>
@@ -146,7 +152,16 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
   };
 
   // Verificar si el usuario es owner de la org actual
-  const isOwner = currentOrg ? currentOrg.ownerId === session?.user?.id : false;
+  const isOwner =
+    session?.user?.isOwner ??
+    (currentOrg ? currentOrg.ownerId === session?.user?.id : false);
+
+  // Obtener el rol del usuario - OPTIMIZADO: usar session cache primero
+  const userRole =
+    session?.user?.role ??
+    (isOwner
+      ? Role.OWNER
+      : memberships.find((m) => m.orgId === currentOrg?.id)?.role || null);
 
   const value: OrganizationContextType = {
     currentOrg,
@@ -154,6 +169,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
     setCurrentOrg,
     isLoading,
     isOwner,
+    userRole,
     refreshOrganizations: fetchOrganizations,
   };
 

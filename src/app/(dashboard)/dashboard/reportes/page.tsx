@@ -1,14 +1,9 @@
-import { redirect } from "next/navigation";
-
-import { auth } from "@/auth";
+import { requireRole, PERMISSIONS } from "@/lib/permissions";
 import { ReportsDashboard } from "@/components/reports/reports-dashboard";
 
 export default async function ReportesPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  // Solo OWNER y MANAGER pueden ver reportes
+  await requireRole(PERMISSIONS.REPORTS);
 
   return <ReportsDashboard />;
 }

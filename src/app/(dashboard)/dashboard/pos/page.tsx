@@ -1,14 +1,9 @@
-import { redirect } from "next/navigation";
-
-import { auth } from "@/auth";
+import { requireRole, PERMISSIONS } from "@/lib/permissions";
 import { PosTerminal } from "@/components/pos/pos-terminal";
 
 export default async function PosPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  // Solo OWNER, MANAGER y CASHIER pueden usar el POS
+  await requireRole(PERMISSIONS.POS);
 
   return <PosTerminal />;
 }

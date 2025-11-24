@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Image from "next/image";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireRole, PERMISSIONS } from "@/lib/permissions";
 import {
   Card,
   CardContent,
@@ -18,26 +18,13 @@ import { PendingInvitationActions } from "@/components/staff/pending-invitation-
 import { MemberActions } from "@/components/staff/member-actions";
 
 export default async function StaffPage() {
-  // Verificar autenticación
-  const session = await auth();
+  // Solo OWNER puede gestionar personal
+  const { userId, orgId } = await requireRole(PERMISSIONS.STAFF);
 
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
-
-  // Obtener la primera organización del usuario con memberships
+  // Obtener la organización con memberships
   const userOrgs = await prisma.organization.findMany({
     where: {
-      OR: [
-        { ownerId: session.user.id },
-        {
-          memberships: {
-            some: {
-              userId: session.user.id,
-            },
-          },
-        },
-      ],
+      id: orgId,
     },
     include: {
       owner: {
@@ -98,9 +85,9 @@ export default async function StaffPage() {
   }
 
   // Verificar si es owner o manager para mostrar funciones de gestión
-  const isOwner = currentOrg.ownerId === session.user?.id;
+  const isOwner = currentOrg.ownerId === userId;
   const userMembership = currentOrg.memberships.find(
-    (m) => m.userId === session.user?.id
+    (m) => m.userId === userId
   );
   const canManageStaff = isOwner || userMembership?.role === "MANAGER";
 
@@ -248,7 +235,7 @@ export default async function StaffPage() {
                 <div>
                   <div className="font-medium">
                     {currentOrg.owner.name || "Sin nombre"}
-                    {currentOrg.owner.id === session.user?.id && (
+                    {currentOrg.owner.id === userId && (
                       <span className="text-sm text-muted-foreground ml-2">
                         (Tú)
                       </span>
@@ -268,7 +255,7 @@ export default async function StaffPage() {
             {/* Otros miembros */}
             {currentOrg.memberships.map((membership) => {
               const RoleIcon = getRoleIcon(membership.role);
-              const isCurrentUser = membership.userId === session.user?.id;
+              const isCurrentUser = membership.userId === userId;
               return (
                 <div
                   key={membership.id}

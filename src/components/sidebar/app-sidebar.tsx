@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useOrganization } from "@/contexts/organization-context";
+import { Role } from "@prisma/client";
 
 import { NavMain } from "@/components/sidebar/nav-main";
 import { NavProjects } from "@/components/sidebar/nav-projects";
@@ -100,22 +101,90 @@ const quickActions = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session } = useSession();
-  const { organizations } = useOrganization();
+  const { organizations, currentOrg, userRole } = useOrganization();
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase();
   const isAdmin =
     !!adminEmail && session?.user?.email?.toLowerCase() === adminEmail;
 
+  // Filtrar navegación según el rol del usuario
   const mainNavigation = React.useMemo(() => {
     const items = [...restaurantNavigation];
+
+    // Filtrar items según permisos
+    const filteredItems = items.filter((item) => {
+      // Dashboard - todos pueden ver
+      if (item.url === "/dashboard") return true;
+
+      // Mesas - OWNER, MANAGER, CASHIER, WAITER
+      if (item.url === "/dashboard/mesas") {
+        return [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WAITER].includes(
+          userRole as Role
+        );
+      }
+
+      // Menú - todos pueden ver, pero solo OWNER y MANAGER editar
+      if (item.url === "/dashboard/menu") {
+        return true; // Se controla edición en la página
+      }
+
+      // Pedidos - todos pueden ver
+      if (item.url === "/dashboard/pedidos") {
+        return true;
+      }
+
+      // Staff - solo OWNER
+      if (item.url === "/dashboard/staff") {
+        return userRole === Role.OWNER;
+      }
+
+      // Configuración - solo OWNER
+      if (item.url === "/dashboard/configuracion") {
+        return userRole === Role.OWNER;
+      }
+
+      // Branding - solo OWNER
+      if (item.url === "/dashboard/branding") {
+        return userRole === Role.OWNER;
+      }
+
+      return true;
+    });
+
     if (isAdmin) {
-      items.push({
+      filteredItems.push({
         title: "Admin",
         url: "/dashboard/admin",
         icon: ShieldCheck,
       });
     }
-    return items;
-  }, [isAdmin]);
+    return filteredItems;
+  }, [isAdmin, userRole]);
+
+  // Filtrar acciones rápidas según rol
+  const filteredQuickActions = React.useMemo(() => {
+    return quickActions.filter((action) => {
+      // Reportes - solo OWNER y MANAGER
+      if (action.url === "/dashboard/reportes") {
+        return [Role.OWNER, Role.MANAGER].includes(userRole as Role);
+      }
+
+      // POS - OWNER, MANAGER, CASHIER, WAITER
+      if (action.url === "/dashboard/pos") {
+        return [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.WAITER].includes(
+          userRole as Role
+        );
+      }
+
+      // Cocina - OWNER, MANAGER, CASHIER, KITCHEN
+      if (action.url === "/dashboard/cocina") {
+        return [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.KITCHEN].includes(
+          userRole as Role
+        );
+      }
+
+      return true;
+    });
+  }, [userRole]);
 
   // Datos del usuario desde la sesión
   const userData = session?.user
@@ -150,7 +219,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={mainNavigation} />
-        <NavProjects projects={quickActions} />
+        <NavProjects projects={filteredQuickActions} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={userData} />

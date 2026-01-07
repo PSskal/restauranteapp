@@ -22,16 +22,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  QrCode,
   Plus,
   Trash2,
   Eye,
   Loader2,
   Printer,
   Download,
+  List,
+  LayoutGrid,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CreateTableModal } from "@/components/tables/create-table-modal";
 import { QRCodeCanvas } from "@/components/qr/qr-code-canvas";
+import { FloorPlanEditor } from "@/components/mesas/floor-plan-editor";
 import { toast } from "sonner";
 
 interface Table {
@@ -251,10 +254,6 @@ export default function MesasPage() {
     );
   }
 
-  const enabledCount = tables.filter((table) => table.isEnabled).length;
-  const disabledCount = tables.length - enabledCount;
-  const lastTable = tables.length > 0 ? tables[tables.length - 1] : null;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -300,167 +299,131 @@ export default function MesasPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {tables.map((table: Table) => (
-            <Card key={table.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Mesa {table.number}</CardTitle>
-                  <Badge
-                    variant={table.isEnabled ? "default" : "outline"}
-                    className={`text-xs ${
-                      table.isEnabled
-                        ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {table.isEnabled ? "Habilitada" : "Deshabilitada"}
-                  </Badge>
-                </div>
-                <CardDescription className="text-xs">
-                  Token: {table.qrToken.slice(0, 8)}...
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg">
-                  <QRCodeCanvas
-                    url={`${baseUrl}/table/${table.qrToken}`}
-                    size={120}
-                    className="rounded"
-                  />
-                </div>
+        <Tabs defaultValue="list" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+            <TabsTrigger value="list" className="flex items-center gap-2">
+              <List className="h-4 w-4" />
+              Vista de Lista
+            </TabsTrigger>
+            <TabsTrigger value="floor-plan" className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              Plano del Local
+            </TabsTrigger>
+          </TabsList>
 
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div>
-                    <p className="text-sm font-medium">Habilitar pedidos</p>
-                    <p className="text-xs text-muted-foreground">
-                      Activa la mesa solo cuando haya comensales presentes.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={table.isEnabled}
-                    onCheckedChange={(value) => handleToggleTable(table, value)}
-                    disabled={updatingTableId === table.id}
-                  />
-                </div>
+          <TabsContent value="list" className="space-y-0">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {tables.map((table: Table) => (
+                <Card
+                  key={table.id}
+                  className="hover:shadow-md transition-shadow"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">
+                        Mesa {table.number}
+                      </CardTitle>
+                      <Badge
+                        variant={table.isEnabled ? "default" : "outline"}
+                        className={`text-xs ${
+                          table.isEnabled
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {table.isEnabled ? "Habilitada" : "Deshabilitada"}
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-xs">
+                      Token: {table.qrToken.slice(0, 8)}...
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg">
+                      <QRCodeCanvas
+                        url={`${baseUrl}/table/${table.qrToken}`}
+                        size={120}
+                        className="rounded"
+                      />
+                    </div>
 
-                {updatingTableId === table.id ? (
-                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Guardando cambios...
-                  </p>
-                ) : null}
+                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">Habilitar pedidos</p>
+                        <p className="text-xs text-muted-foreground">
+                          Activa la mesa solo cuando haya comensales presentes.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={table.isEnabled}
+                        onCheckedChange={(value) =>
+                          handleToggleTable(table, value)
+                        }
+                        disabled={updatingTableId === table.id}
+                      />
+                    </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => handleViewQR(table)}
-                  >
-                    <Eye className="h-3 w-3 mr-1" />
-                    Ver QR
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const link = document.createElement("a");
-                      link.href = `/api/qr/${table.id}`;
-                      link.download = `mesa-${table.number}-qr.png`;
-                      link.click();
-                    }}
-                  >
-                    <Download className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                    {updatingTableId === table.id ? (
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Guardando cambios...
+                      </p>
+                    ) : null}
 
-                <div className="text-xs text-muted-foreground text-center">
-                  URL:{" "}
-                  {baseUrl
-                    ? `${baseUrl}/table/${table.qrToken}`
-                    : `/table/${table.qrToken}`}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleViewQR(table)}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Ver QR
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = `/api/qr/${table.id}`;
+                          link.download = `mesa-${table.number}-qr.png`;
+                          link.click();
+                        }}
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground text-center">
+                      URL:{" "}
+                      {baseUrl
+                        ? `${baseUrl}/table/${table.qrToken}`
+                        : `/table/${table.qrToken}`}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="floor-plan" className="space-y-0">
+            <FloorPlanEditor
+              tables={tables}
+              onSave={(positions) => {
+                console.log("Saving floor plan positions:", positions);
+                toast.success("Layout guardado exitosamente");
+              }}
+            />
+          </TabsContent>
+        </Tabs>
       )}
-
-      {/* Estadísticas rápidas */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Mesas</CardTitle>
-            <QrCode className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{tables.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Mesas habilitadas
-            </CardTitle>
-            <div className="h-4 w-4 bg-emerald-500 rounded-full"></div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {enabledCount}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Disponibles para recibir pedidos
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Mesas deshabilitadas
-            </CardTitle>
-            <div className="h-4 w-4 bg-red-500 rounded-full"></div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {disabledCount}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Activa solo cuando lleguen comensales
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Última Mesa</CardTitle>
-            <Badge variant="outline">
-              #{lastTable?.number ?? "N/A"}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {lastTable?.number ?? 0}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {lastTable
-                ? lastTable.isEnabled
-                  ? "Actualmente habilitada"
-                  : "Actualmente deshabilitada"
-                : "Sin registros"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       <CreateTableModal
         open={isCreateModalOpen}

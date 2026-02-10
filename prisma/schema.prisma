@@ -163,6 +163,15 @@ model Table {
   number    Int
   qrToken   String        @default(uuid()) // Token para URL pública del QR
   isEnabled Boolean       @default(false)
+  
+  // Campos para el floor plan editor (posición y diseño)
+  positionX Float?        // Posición X en el canvas del floor plan
+  positionY Float?        // Posición Y en el canvas del floor plan
+  width     Float?        // Ancho de la mesa en el floor plan
+  height    Float?        // Alto de la mesa en el floor plan
+  shape     String?       // Forma: "square", "circle", "rectangle"
+  rotation  Float?        // Rotación en grados (0-360)
+  
   org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orders    Order[]
 

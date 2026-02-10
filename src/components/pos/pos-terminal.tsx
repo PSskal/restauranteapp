@@ -109,7 +109,7 @@ export function PosTerminal() {
       if (!categoriesResponse.ok) {
         const data = await categoriesResponse.json().catch(() => null);
         throw new Error(
-          data?.error || "No pudimos cargar las categorias del menu"
+          data?.error || "No pudimos cargar las categorias del menu",
         );
       }
 
@@ -139,7 +139,7 @@ export function PosTerminal() {
           priceCents: item.priceCents,
           imageUrl: item.imageUrl ?? null,
           category: item.category,
-        }))
+        })),
       );
       setSelectedCategory("all");
     } catch (error) {
@@ -167,7 +167,7 @@ export function PosTerminal() {
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         throw new Error(
-          data?.error || "No pudimos cargar las mesas del restaurante"
+          data?.error || "No pudimos cargar las mesas del restaurante",
         );
       }
 
@@ -176,11 +176,11 @@ export function PosTerminal() {
       };
 
       const enabledTables = (data.tables ?? []).filter(
-        (table) => table.isEnabled
+        (table) => table.isEnabled,
       );
       setTables(enabledTables);
       setSelectedTableId((prev) =>
-        prev && enabledTables.some((table) => table.id === prev) ? prev : null
+        prev && enabledTables.some((table) => table.id === prev) ? prev : null,
       );
     } catch (error) {
       const message =
@@ -221,17 +221,17 @@ export function PosTerminal() {
 
   const selectedTable = useMemo(
     () => tables.find((table) => table.id === selectedTableId) ?? null,
-    [selectedTableId, tables]
+    [selectedTableId, tables],
   );
 
   const cartCount = useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
-    [cart]
+    [cart],
   );
 
   const cartTotalC = useMemo(
     () => cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0),
-    [cart]
+    [cart],
   );
 
   const handleAddToCart = useCallback((item: PosMenuItem) => {
@@ -241,7 +241,7 @@ export function PosTerminal() {
         return prev.map((entry) =>
           entry.id === item.id
             ? { ...entry, quantity: entry.quantity + 1 }
-            : entry
+            : entry,
         );
       }
       return [
@@ -262,9 +262,9 @@ export function PosTerminal() {
         .map((entry) =>
           entry.id === itemId
             ? { ...entry, quantity: Math.max(entry.quantity - 1, 0) }
-            : entry
+            : entry,
         )
-        .filter((entry) => entry.quantity > 0)
+        .filter((entry) => entry.quantity > 0),
     );
   }, []);
 
@@ -301,8 +301,9 @@ export function PosTerminal() {
             })),
             notes: orderNotes.trim() || undefined,
             tableId: selectedTableId || undefined,
+            autoAccept: true, // Pedidos del POS se aceptan automáticamente
           }),
-        }
+        },
       );
 
       const data = await response.json().catch(() => null);
@@ -316,7 +317,7 @@ export function PosTerminal() {
       toast.success(
         orderNumber
           ? `Pedido #${orderNumber} creado correctamente`
-          : "Pedido creado correctamente"
+          : "Pedido creado correctamente",
       );
       clearCart();
       loadCatalog();
@@ -456,7 +457,7 @@ export function PosTerminal() {
                   <span>S/ ${((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
                 </div>
               </div>
-            `
+            `,
               )
               .join("")}
           </div>
@@ -694,7 +695,7 @@ export function PosTerminal() {
                               <div className="flex justify-end">
                                 {(() => {
                                   const cartItem = cart.find(
-                                    (c) => c.id === item.id
+                                    (c) => c.id === item.id,
                                   );
                                   const quantity = cartItem?.quantity || 0;
 

@@ -416,9 +416,30 @@ export default function MesasPage() {
           <TabsContent value="floor-plan" className="space-y-0">
             <FloorPlanEditor
               tables={tables}
-              onSave={(positions) => {
-                console.log("Saving floor plan positions:", positions);
-                toast.success("Layout guardado exitosamente");
+              onSave={async (positions) => {
+                if (!currentOrg) return;
+
+                try {
+                  const response = await fetch(
+                    `/api/organizations/${currentOrg.id}/tables/layout`,
+                    {
+                      method: "PATCH",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({ positions }),
+                    }
+                  );
+
+                  if (!response.ok) {
+                    throw new Error("Error al guardar el layout");
+                  }
+
+                  toast.success("Layout guardado exitosamente");
+                } catch (error) {
+                  console.error("Error guardando layout:", error);
+                  toast.error("Error al guardar el layout");
+                }
               }}
             />
           </TabsContent>

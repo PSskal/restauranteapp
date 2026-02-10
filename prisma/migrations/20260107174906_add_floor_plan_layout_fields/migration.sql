@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "public"."Table" ADD COLUMN     "height" DOUBLE PRECISION,
+ADD COLUMN     "positionX" DOUBLE PRECISION,
+ADD COLUMN     "positionY" DOUBLE PRECISION,
+ADD COLUMN     "rotation" DOUBLE PRECISION,
+ADD COLUMN     "shape" TEXT,
+ADD COLUMN     "width" DOUBLE PRECISION;

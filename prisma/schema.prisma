@@ -1,21 +1,21 @@
 // =============== Prisma / PostgreSQL ===============
-generator client { 
-  provider = "prisma-client-js" 
+generator client {
+  provider = "prisma-client-js"
 }
 
-datasource db { 
+datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 // =============== Enums mínimos (en inglés) ===============
 // Roles de trabajo dentro de un restaurante (DUENO/GERENTE/CAJERO/MESERO/COCINA)
-enum Role { 
-  OWNER 
-  MANAGER 
-  CASHIER 
-  WAITER 
-  KITCHEN 
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+  WAITER
+  KITCHEN
 }
 
 // Estados principales del pedido para un MVP sencillo
@@ -29,16 +29,25 @@ enum OrderStatus {
   CANCELLED
 }
 
+// Estado individual por plato dentro del pedido (KDS)
+enum OrderItemStatus {
+  PENDING
+  IN_PROGRESS
+  READY
+  SERVED
+  CANCELLED
+}
+
 // Métodos de pago manuales (sin integraciones online)
-enum PaymentMethod { 
-  CASH 
-  CARD 
+enum PaymentMethod {
+  CASH
+  CARD
 }
 
 // Estado de registro de pago (simple)
-enum PaymentStatus { 
-  PENDING 
-  PAID 
+enum PaymentStatus {
+  PENDING
+  PAID
 }
 
 enum PlanTier {
@@ -48,17 +57,17 @@ enum PlanTier {
 
 // =============== Auth.js Models (Required) ===============
 model User {
-  id            String        @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String?
-  email         String?       @unique
+  email         String?   @unique
   emailVerified DateTime?
   image         String?
-  createdAt     DateTime      @default(now())
-  
+  createdAt     DateTime  @default(now())
+
   // Auth.js required relations
-  accounts      Account[]
-  sessions      Session[]
-  
+  accounts Account[]
+  sessions Session[]
+
   // Business relations
   memberships   Membership[]
   ownedOrgs     Organization[] @relation("OrganizationOwner")
@@ -66,19 +75,19 @@ model User {
 }
 
 model Account {
-  id                String   @id @default(cuid())
+  id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?  @db.Text
-  access_token      String?  @db.Text
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?  @db.Text
+  id_token          String? @db.Text
   session_state     String?
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -102,78 +111,78 @@ model VerificationToken {
 // =============== Usuarios y pertenencia (multi-tenant una-sede) ===============
 // Restaurant/tenant (una organization = un restaurante)
 model Organization {
-  id         String        @id @default(cuid())
-  name       String
-  slug       String        @unique        // Identificador legible para URL (único)
-  ownerId    String
-  plan       PlanTier      @default(FREE)
-  planExpiresAt DateTime?  // Fecha de expiración cuando se otorga Premium manualmente
-  planUpdatedAt DateTime?  // Última vez que se cambió de plan
-  phone      String?
-  email      String?
-  address    String?
-  description String?      @db.Text
-  latitude   Float?
-  longitude  Float?
-  whatsappNumber           String?
-  whatsappOrderingEnabled  Boolean        @default(false)
-  owner      User          @relation("OrganizationOwner", fields: [ownerId], references: [id])
-  branding   Branding?
+  id                      String         @id @default(cuid())
+  name                    String
+  slug                    String         @unique // Identificador legible para URL (único)
+  ownerId                 String
+  plan                    PlanTier       @default(FREE)
+  planExpiresAt           DateTime? // Fecha de expiración cuando se otorga Premium manualmente
+  planUpdatedAt           DateTime? // Última vez que se cambió de plan
+  phone                   String?
+  email                   String?
+  address                 String?
+  description             String?        @db.Text
+  latitude                Float?
+  longitude               Float?
+  whatsappNumber          String?
+  whatsappOrderingEnabled Boolean        @default(false)
+  owner                   User           @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  branding                Branding?
   // Recursos del restaurante:
-  tables     Table[]
-  categories MenuCategory[]
-  menuItems  MenuItem[]
-  orders     Order[]
-  memberships Membership[]
-  invitations Invitation[]
-  openingHours OpeningHour[]
-  createdAt  DateTime      @default(now())
+  tables                  Table[]
+  categories              MenuCategory[]
+  menuItems               MenuItem[]
+  orders                  Order[]
+  memberships             Membership[]
+  invitations             Invitation[]
+  openingHours            OpeningHour[]
+  createdAt               DateTime       @default(now())
 }
 
 // Relación (usuario ↔ organization) con rol asignado
 model Membership {
-  id        String        @id @default(cuid())
-  userId    String
-  orgId     String
-  role      Role
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id     String       @id @default(cuid())
+  userId String
+  orgId  String
+  role   Role
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([userId, orgId]) // Un usuario no debe duplicar membresía en la misma org
 }
 
 // (Opcional MVP) Invitación por email para asignar roles de forma segura
 model Invitation {
-  id         String        @id @default(cuid())
+  id         String       @id @default(cuid())
   orgId      String
   email      String
   role       Role
-  token      String        @unique        // Token para aceptar invitación
+  token      String       @unique // Token para aceptar invitación
   expiresAt  DateTime
   acceptedAt DateTime?
-  createdAt  DateTime      @default(now())
-  org        Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
 
 // =============== Mesas (QR) ===============
 // Mesa del salón; cada una tiene un token único para el link público (QR)
 model Table {
-  id        String        @id @default(cuid())
+  id        String  @id @default(cuid())
   orgId     String
   number    Int
-  qrToken   String        @default(uuid()) // Token para URL pública del QR
-  isEnabled Boolean       @default(false)
-  
+  qrToken   String  @default(uuid()) // Token para URL pública del QR
+  isEnabled Boolean @default(false)
+
   // Campos para el floor plan editor (posición y diseño)
-  positionX Float?        // Posición X en el canvas del floor plan
-  positionY Float?        // Posición Y en el canvas del floor plan
-  width     Float?        // Ancho de la mesa en el floor plan
-  height    Float?        // Alto de la mesa en el floor plan
-  shape     String?       // Forma: "square", "circle", "rectangle"
-  rotation  Float?        // Rotación en grados (0-360)
-  
-  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orders    Order[]
+  positionX Float? // Posición X en el canvas del floor plan
+  positionY Float? // Posición Y en el canvas del floor plan
+  width     Float? // Ancho de la mesa en el floor plan
+  height    Float? // Alto de la mesa en el floor plan
+  shape     String? // Forma: "square", "circle", "rectangle"
+  rotation  Float? // Rotación en grados (0-360)
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orders Order[]
 
   @@unique([orgId, number]) // Número de mesa único por restaurante
 }
@@ -181,13 +190,13 @@ model Table {
 // =============== Menú básico ===============
 // Categoría de menú (Entradas, Platos, Bebidas, etc.) por restaurante
 model MenuCategory {
-  id        String        @id @default(cuid())
+  id        String       @id @default(cuid())
   orgId     String
   name      String
-  position  Int           @default(0)     // Para ordenar categorías en la UI
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  position  Int          @default(0) // Para ordenar categorías en la UI
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   items     MenuItem[]
 
   @@unique([orgId, name]) // Evita duplicados de nombre de categoría en la misma org
@@ -195,104 +204,157 @@ model MenuCategory {
 
 // Ítem de menú (plato/bebida) con precio base (centavos)
 model MenuItem {
-  id          String        @id @default(cuid())
-  orgId       String
-  categoryId  String
-  name        String
-  description String?                       // Descripción del producto
-  priceCents  Int                           // Precio en centavos (evita flotantes)
-  imageUrl    String?                       // URL de la imagen del producto
-  active      Boolean       @default(true)  // Para ocultar temporalmente de la carta
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  category    MenuCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  orderItems  OrderItem[]
+  id             String          @id @default(cuid())
+  orgId          String
+  categoryId     String
+  name           String
+  description    String? // Descripción del producto
+  priceCents     Int // Precio en centavos (evita flotantes)
+  imageUrl       String? // URL de la imagen del producto
+  active         Boolean         @default(true) // Para ocultar temporalmente de la carta
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  org            Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  category       MenuCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems     OrderItem[]
+  modifierGroups ModifierGroup[]
 
   @@index([orgId, active]) // Búsqueda rápida por org/activo
+}
+
+// Grupo de modificadores de un plato (ej. "Término", "Extras", "Tamaño")
+model ModifierGroup {
+  id         String   @id @default(cuid())
+  menuItemId String
+  name       String
+  required   Boolean  @default(false) // Si el cliente está obligado a elegir
+  minSelect  Int      @default(0) // Mínimo de opciones a elegir
+  maxSelect  Int      @default(1) // Máximo de opciones (1 = radio, >1 = checkbox)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  menuItem  MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  modifiers Modifier[]
+
+  @@index([menuItemId])
+}
+
+// Opción concreta dentro de un grupo (ej. "Medio", "Extra queso +S/3")
+model Modifier {
+  id          String   @id @default(cuid())
+  groupId     String
+  name        String
+  priceDeltaC Int      @default(0) // Delta de precio en centavos (+ o -)
+  position    Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group      ModifierGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  orderItems OrderItemModifier[]
+
+  @@index([groupId])
 }
 
 // =============== Orders y Payments (simple) ===============
 // Pedido generado desde una mesa (QR) o por staff; numeración por restaurante
 model Order {
-  id           String        @id @default(cuid())
-  orgId        String
-  tableId      String?                         // null si fuese para llevar (futuro)
-  number       Int                              // correlativo por restaurant
-  status       OrderStatus   @default(DRAFT)
-  notes        String?
-  totalC       Int            @default(0)      // Total del pedido (centavos)
-  createdById  String?                          // usuario que confirma/crea
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id          String      @id @default(cuid())
+  orgId       String
+  tableId     String? // null si fuese para llevar (futuro)
+  number      Int // correlativo por restaurant
+  status      OrderStatus @default(DRAFT)
+  notes       String?
+  totalC      Int         @default(0) // Total del pedido (centavos)
+  createdById String? // usuario que confirma/crea
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
-  org          Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  table        Table?         @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  createdBy    User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  table     Table?       @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  createdBy User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  items        OrderItem[]
-  payments     Payment[]
+  items    OrderItem[]
+  payments Payment[]
 
-  @@unique([orgId, number])      // Número único por restaurante
-  @@index([orgId, status])       // Filtros comunes: por org y estado
+  @@unique([orgId, number]) // Número único por restaurante
+  @@index([orgId, status]) // Filtros comunes: por org y estado
 }
 
 // Ítem del pedido; se guardan nombre y precio al momento (histórico)
 model OrderItem {
-  id        String     @id @default(cuid())
-  orderId   String
-  menuItemId String
-  name      String                      // Denormalizado para conservar histórico
-  quantity  Int         @default(1)
-  priceC    Int                              // Precio unitario (centavos)
-  totalC    Int                              // quantity * priceC
-  notes     String?
+  id              String          @id @default(cuid())
+  orderId         String
+  menuItemId      String
+  name            String // Denormalizado para conservar histórico
+  quantity        Int             @default(1)
+  priceC          Int // Precio unitario base (centavos)
+  modifiersPriceC Int             @default(0) // Suma de modificadores unitarios
+  totalC          Int // quantity * (priceC + modifiersPriceC)
+  notes           String?
+  status          OrderItemStatus @default(PENDING) // Estado individual en cocina
+  readyAt         DateTime? // Momento en que se marcó listo
+  servedAt        DateTime? // Momento en que se marcó servido
 
-  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem  MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem  MenuItem            @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  modifiers OrderItemModifier[]
 
   @@index([orderId])
+  @@index([orderId, status])
+}
+
+// Snapshot de modificadores elegidos en el momento de la orden
+model OrderItemModifier {
+  id          String  @id @default(cuid())
+  orderItemId String
+  modifierId  String? // null si el modificador fue borrado después
+  groupName   String // snapshot del grupo
+  name        String // snapshot del nombre
+  priceDeltaC Int     @default(0) // snapshot del delta unitario
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifier  Modifier? @relation(fields: [modifierId], references: [id], onDelete: SetNull)
+
+  @@index([orderItemId])
 }
 
 // Registro de pago manual (efectivo/tarjeta); sin integraciones online
 model Payment {
-  id        String         @id @default(cuid())
+  id        String        @id @default(cuid())
   orderId   String
   method    PaymentMethod
-  status    PaymentStatus  @default(PENDING)
+  status    PaymentStatus @default(PENDING)
   amountC   Int
-  createdAt DateTime       @default(now())
+  createdAt DateTime      @default(now())
 
-  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model Branding {
-  id          String        @id @default(cuid())
-  orgId       String        @unique
-  brandColor  String        @default("#146E37")
-  accentColor String        @default("#F9FAFB")
+  id          String   @id @default(cuid())
+  orgId       String   @unique
+  brandColor  String   @default("#146E37")
+  accentColor String   @default("#F9FAFB")
   logoUrl     String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
 
 model OpeningHour {
-  id        String        @id @default(cuid())
+  id        String   @id @default(cuid())
   orgId     String
   dayOfWeek Int
-  isOpen    Boolean       @default(true)
+  isOpen    Boolean  @default(true)
   openTime  String?
   closeTime String?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, dayOfWeek])
 }
-
-
-
-

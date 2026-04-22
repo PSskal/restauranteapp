@@ -11,7 +11,9 @@ import {
   CircleCheck,
   Clock3,
   Loader2,
+  PlayCircle,
   RefreshCcw,
+  RotateCcw,
   UtensilsCrossed,
   XCircle,
 } from "lucide-react";
@@ -37,11 +39,28 @@ type OrderStatus =
   | "READY"
   | "SERVED"
   | "CANCELLED";
+
+type OrderItemStatus =
+  | "PENDING"
+  | "IN_PROGRESS"
+  | "READY"
+  | "SERVED"
+  | "CANCELLED";
+
+type KitchenOrderItemModifier = {
+  id: string;
+  groupName: string;
+  name: string;
+  priceDeltaC: number;
+};
+
 type KitchenOrderItem = {
   id: string;
   name: string;
   quantity: number;
   notes: string | null;
+  status: OrderItemStatus;
+  modifiers: KitchenOrderItemModifier[];
 };
 
 type KitchenOrder = {
@@ -69,15 +88,7 @@ const statusLabels: Record<OrderStatus, string> = {
   SERVED: "Servido",
   CANCELLED: "Cancelado",
 };
-const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
-  DRAFT: ["PLACED", "CANCELLED"],
-  PLACED: ["ACCEPTED", "CANCELLED"],
-  ACCEPTED: ["PREPARING", "CANCELLED"],
-  PREPARING: ["READY", "CANCELLED"],
-  READY: ["SERVED", "CANCELLED"],
-  SERVED: [],
-  CANCELLED: [],
-};
+
 type ColumnKey = (typeof ACTIVE_STATUSES)[number];
 
 const columnConfig: Record<
@@ -96,7 +107,7 @@ const columnConfig: Record<
     accent: "border-amber-200 bg-amber-50",
   },
   PREPARING: {
-    title: "En preparacion",
+    title: "En preparación",
     description: "Pedidos en cocina o barra",
     icon: ChefHat,
     accent: "border-blue-200 bg-blue-50",
@@ -121,6 +132,41 @@ const statusBadgeVariants: Record<
   SERVED: "secondary",
   CANCELLED: "destructive",
 };
+
+const itemStatusLabels: Record<OrderItemStatus, string> = {
+  PENDING: "Pendiente",
+  IN_PROGRESS: "En cocina",
+  READY: "Listo",
+  SERVED: "Servido",
+  CANCELLED: "Cancelado",
+};
+
+const itemStatusBadge: Record<
+  OrderItemStatus,
+  { className: string; label: string }
+> = {
+  PENDING: {
+    className: "border-slate-200 bg-slate-50 text-slate-700",
+    label: itemStatusLabels.PENDING,
+  },
+  IN_PROGRESS: {
+    className: "border-blue-200 bg-blue-50 text-blue-700",
+    label: itemStatusLabels.IN_PROGRESS,
+  },
+  READY: {
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    label: itemStatusLabels.READY,
+  },
+  SERVED: {
+    className: "border-gray-200 bg-gray-50 text-gray-700",
+    label: itemStatusLabels.SERVED,
+  },
+  CANCELLED: {
+    className: "border-red-200 bg-red-50 text-red-700",
+    label: itemStatusLabels.CANCELLED,
+  },
+};
+
 function formatTime(dateIso: string) {
   const date = new Date(dateIso);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -133,6 +179,7 @@ export function KitchenDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
   const orgId = currentOrg?.id ?? null;
@@ -209,41 +256,67 @@ export function KitchenDashboard() {
     [orgId]
   );
 
-  const handleStatusChange = useCallback(
-    async (orderId: string, status: OrderStatus) => {
-      if (!orgId) {
-        return;
+  const handleItemStatusChange = useCallback(
+    async (
+      orderId: string,
+      itemId: string,
+      status: OrderItemStatus
+    ) => {
+      if (!orgId) return;
+      setUpdatingItemId(itemId);
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/orders/${orderId}/items/${itemId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          }
+        );
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(data?.error || "No se pudo actualizar el ítem");
+        }
+        await fetchOrders({ silent: true });
+        toast.success(`Plato: ${itemStatusLabels[status]}`);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Error al actualizar ítem"
+        );
+      } finally {
+        setUpdatingItemId(null);
       }
+    },
+    [fetchOrders, orgId]
+  );
 
+  const handleOrderStatusChange = useCallback(
+    async (orderId: string, status: OrderStatus) => {
+      if (!orgId) return;
       setUpdatingOrderId(orderId);
-
       try {
         const response = await fetch(
           `/api/organizations/${orgId}/orders/${orderId}`,
           {
             method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status }),
           }
         );
-
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as {
             error?: string;
           } | null;
           throw new Error(data?.error || "No se pudo actualizar el pedido");
         }
-
         await fetchOrders({ silent: true });
-        toast.success(`Pedido actualizado a ${statusLabels[status]}`);
+        toast.success(`Pedido ${statusLabels[status].toLowerCase()}`);
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Error desconocido al actualizar";
-        toast.error(message);
+        toast.error(
+          err instanceof Error ? err.message : "Error al actualizar pedido"
+        );
       } finally {
         setUpdatingOrderId(null);
       }
@@ -282,7 +355,7 @@ export function KitchenDashboard() {
         <div>
           <p className="text-lg font-semibold">Selecciona un restaurante</p>
           <p className="text-sm text-muted-foreground">
-            Elige una organizacion para ver los pedidos de cocina.
+            Elige una organización para ver los pedidos de cocina.
           </p>
         </div>
       </div>
@@ -295,7 +368,8 @@ export function KitchenDashboard() {
         <div>
           <h1 className="text-2xl font-semibold">Vista de cocina</h1>
           <p className="text-sm text-muted-foreground">
-            Control en tiempo real de pedidos activos.
+            Control en tiempo real por plato. Marca cada ítem individualmente
+            cuando esté listo.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -306,7 +380,7 @@ export function KitchenDashboard() {
               onCheckedChange={setAutoRefresh}
             />
             <label htmlFor="kitchen-auto-refresh" className="text-sm">
-              Actualizacion automatica (15s)
+              Actualización automática (15s)
             </label>
           </div>
           <Button
@@ -353,8 +427,10 @@ export function KitchenDashboard() {
             key={status}
             status={status}
             orders={groupedOrders[status as ColumnKey]}
-            onStatusChange={handleStatusChange}
+            updatingItemId={updatingItemId}
             updatingOrderId={updatingOrderId}
+            onItemStatusChange={handleItemStatusChange}
+            onOrderStatusChange={handleOrderStatusChange}
           />
         ))}
       </div>
@@ -365,8 +441,14 @@ export function KitchenDashboard() {
 type KitchenStatusColumnProps = {
   status: ColumnKey;
   orders: KitchenOrder[];
+  updatingItemId: string | null;
   updatingOrderId: string | null;
-  onStatusChange: (
+  onItemStatusChange: (
+    orderId: string,
+    itemId: string,
+    status: OrderItemStatus
+  ) => Promise<void> | void;
+  onOrderStatusChange: (
     orderId: string,
     status: OrderStatus
   ) => Promise<void> | void;
@@ -375,8 +457,10 @@ type KitchenStatusColumnProps = {
 function KitchenStatusColumn({
   status,
   orders,
+  updatingItemId,
   updatingOrderId,
-  onStatusChange,
+  onItemStatusChange,
+  onOrderStatusChange,
 }: KitchenStatusColumnProps) {
   const config = columnConfig[status];
   const StatusIcon = config.icon;
@@ -409,8 +493,10 @@ function KitchenStatusColumn({
             <KitchenOrderCard
               key={order.id}
               order={order}
+              updatingItemId={updatingItemId}
               updatingOrderId={updatingOrderId}
-              onStatusChange={onStatusChange}
+              onItemStatusChange={onItemStatusChange}
+              onOrderStatusChange={onOrderStatusChange}
             />
           ))
         )}
@@ -421,8 +507,14 @@ function KitchenStatusColumn({
 
 type KitchenOrderCardProps = {
   order: KitchenOrder;
+  updatingItemId: string | null;
   updatingOrderId: string | null;
-  onStatusChange: (
+  onItemStatusChange: (
+    orderId: string,
+    itemId: string,
+    status: OrderItemStatus
+  ) => Promise<void> | void;
+  onOrderStatusChange: (
     orderId: string,
     status: OrderStatus
   ) => Promise<void> | void;
@@ -430,13 +522,19 @@ type KitchenOrderCardProps = {
 
 function KitchenOrderCard({
   order,
+  updatingItemId,
   updatingOrderId,
-  onStatusChange,
+  onItemStatusChange,
+  onOrderStatusChange,
 }: KitchenOrderCardProps) {
-  const nextStatuses = statusTransitions[order.status] || [];
-  const primaryStatus = nextStatuses.find((status) => status !== "CANCELLED");
-  const canCancel = nextStatuses.includes("CANCELLED");
-  const isUpdating = updatingOrderId === order.id;
+  const nonCancelled = order.items.filter((item) => item.status !== "CANCELLED");
+  const readyCount = nonCancelled.filter(
+    (item) => item.status === "READY" || item.status === "SERVED"
+  ).length;
+  const totalCount = nonCancelled.length;
+  const progressPct =
+    totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
+  const isOrderUpdating = updatingOrderId === order.id;
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4 shadow-sm transition hover:shadow-md">
@@ -447,7 +545,7 @@ function KitchenOrderCard({
             <span>
               {order.table ? `Mesa ${order.table.number}` : "Para llevar"}
             </span>
-            <span>&bull;</span>
+            <span>•</span>
             <span>Creado {formatTime(order.createdAt)}</span>
           </div>
         </div>
@@ -456,19 +554,146 @@ function KitchenOrderCard({
         </Badge>
       </div>
 
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {readyCount}/{totalCount} platos listos
+          </span>
+          <span>{progressPct}%</span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-emerald-500 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
-        {order.items.map((item) => (
-          <div key={item.id} className="rounded-md bg-muted/40 p-2">
-            <p className="text-sm font-medium">
-              {item.quantity}x {item.name}
-            </p>
-            {item.notes ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Nota: {item.notes}
-              </p>
-            ) : null}
-          </div>
-        ))}
+        {order.items.map((item) => {
+          const badge = itemStatusBadge[item.status];
+          const isItemUpdating = updatingItemId === item.id;
+          const disabled = isItemUpdating || isOrderUpdating;
+
+          return (
+            <div
+              key={item.id}
+              className="space-y-2 rounded-md bg-muted/40 p-2"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {item.quantity}x {item.name}
+                  </p>
+                  {item.modifiers.length > 0 ? (
+                    <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                      {item.modifiers.map((modifier) => (
+                        <li key={modifier.id}>
+                          <span className="font-medium">
+                            {modifier.groupName}:
+                          </span>{" "}
+                          {modifier.name}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {item.notes ? (
+                    <p className="mt-1 text-xs italic text-amber-700">
+                      Nota: {item.notes}
+                    </p>
+                  ) : null}
+                </div>
+                <Badge variant="outline" className={badge.className}>
+                  {badge.label}
+                </Badge>
+              </div>
+
+              <div className="flex flex-wrap gap-1">
+                {item.status === "PENDING" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() =>
+                      onItemStatusChange(order.id, item.id, "IN_PROGRESS")
+                    }
+                    disabled={disabled}
+                  >
+                    {isItemUpdating ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <PlayCircle className="h-3 w-3" />
+                    )}
+                    Iniciar
+                  </Button>
+                ) : null}
+
+                {(item.status === "PENDING" ||
+                  item.status === "IN_PROGRESS") && (
+                  <Button
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() =>
+                      onItemStatusChange(order.id, item.id, "READY")
+                    }
+                    disabled={disabled}
+                  >
+                    {isItemUpdating ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-3 w-3" />
+                    )}
+                    Marcar listo
+                  </Button>
+                )}
+
+                {item.status === "READY" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() =>
+                        onItemStatusChange(order.id, item.id, "IN_PROGRESS")
+                      }
+                      disabled={disabled}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reabrir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() =>
+                        onItemStatusChange(order.id, item.id, "SERVED")
+                      }
+                      disabled={disabled}
+                    >
+                      <UtensilsCrossed className="h-3 w-3" />
+                      Servido
+                    </Button>
+                  </>
+                ) : null}
+
+                {item.status !== "CANCELLED" && item.status !== "SERVED" ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 gap-1 text-xs text-destructive"
+                    onClick={() =>
+                      onItemStatusChange(order.id, item.id, "CANCELLED")
+                    }
+                    disabled={disabled}
+                  >
+                    <XCircle className="h-3 w-3" />
+                    Anular
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {order.notes ? (
@@ -479,37 +704,46 @@ function KitchenOrderCard({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {primaryStatus ? (
+        {order.status !== "READY" && progressPct === 100 && totalCount > 0 ? (
           <Button
             size="sm"
-            onClick={() => onStatusChange(order.id, primaryStatus)}
-            disabled={isUpdating}
+            onClick={() => onOrderStatusChange(order.id, "READY")}
+            disabled={isOrderUpdating}
             className="flex items-center gap-2"
           >
-            {isUpdating ? (
+            {isOrderUpdating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <CheckCircle2 className="h-4 w-4" />
             )}
-            {statusLabels[primaryStatus]}
+            Marcar pedido listo
           </Button>
         ) : null}
-        {canCancel ? (
+        {order.status === "READY" ? (
           <Button
             size="sm"
-            variant="outline"
-            onClick={() => onStatusChange(order.id, "CANCELLED")}
-            disabled={isUpdating}
+            onClick={() => onOrderStatusChange(order.id, "SERVED")}
+            disabled={isOrderUpdating}
             className="flex items-center gap-2"
           >
-            {isUpdating ? (
+            {isOrderUpdating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <XCircle className="h-4 w-4" />
+              <UtensilsCrossed className="h-4 w-4" />
             )}
-            Cancelar
+            Servido
           </Button>
         ) : null}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onOrderStatusChange(order.id, "CANCELLED")}
+          disabled={isOrderUpdating}
+          className="flex items-center gap-2"
+        >
+          <XCircle className="h-4 w-4" />
+          Cancelar pedido
+        </Button>
       </div>
     </div>
   );

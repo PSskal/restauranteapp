@@ -41,13 +41,30 @@ type OrderStatus =
   | "SERVED"
   | "CANCELLED";
 
+type OrderItemStatus =
+  | "PENDING"
+  | "IN_PROGRESS"
+  | "READY"
+  | "SERVED"
+  | "CANCELLED";
+
+type StaffOrderItemModifier = {
+  id: string;
+  groupName: string;
+  name: string;
+  priceDeltaC: number;
+};
+
 type StaffOrderItem = {
   id: string;
   name: string;
   quantity: number;
   priceC: number;
+  modifiersPriceC?: number;
   totalC: number;
   notes: string | null;
+  status?: OrderItemStatus;
+  modifiers?: StaffOrderItemModifier[];
 };
 
 type StaffOrder = {
@@ -318,17 +335,30 @@ export function OrdersDashboard() {
           <div class="items">
             <div style="font-weight: bold; margin-bottom: 8px;">DETALLE:</div>
             ${order.items
-              .map(
-                (item) => `
+              .map((item) => {
+                const modifiersHtml = (item.modifiers ?? [])
+                  .map(
+                    (modifier) =>
+                      `<div class="item-notes">+ ${modifier.groupName}: ${modifier.name}${
+                        modifier.priceDeltaC !== 0
+                          ? ` (${modifier.priceDeltaC > 0 ? "+" : ""}S/ ${(
+                              modifier.priceDeltaC / 100
+                            ).toFixed(2)})`
+                          : ""
+                      }</div>`,
+                  )
+                  .join("");
+                return `
               <div class="item">
                 <div class="item-header">
                   <span>${item.quantity}x ${item.name}</span>
                   <span>S/ ${(item.totalC / 100).toFixed(2)}</span>
                 </div>
+                ${modifiersHtml}
                 ${item.notes ? `<div class="item-notes">* ${item.notes}</div>` : ""}
               </div>
-            `
-              )
+            `;
+              })
               .join("")}
           </div>
 
@@ -745,6 +775,15 @@ function OrderCard({
                 <span className="font-medium">
                   {item.quantity}x {item.name}
                 </span>
+                {item.modifiers && item.modifiers.length > 0 ? (
+                  <ul className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+                    {item.modifiers.map((modifier) => (
+                      <li key={modifier.id}>
+                        + {modifier.groupName}: {modifier.name}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {item.notes ? (
                   <p className="text-xs text-muted-foreground">
                     Nota: {item.notes}
@@ -917,16 +956,24 @@ function HistorySection({
                   {order.items.length > 0 ? (
                     <div className="space-y-1 rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
                       {order.items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between"
-                        >
-                          <span>
-                            {item.quantity}x {item.name}
-                          </span>
-                          <span className="font-semibold text-foreground">
-                            {formatCurrency(item.totalC)}
-                          </span>
+                        <div key={item.id} className="space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span>
+                              {item.quantity}x {item.name}
+                            </span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(item.totalC)}
+                            </span>
+                          </div>
+                          {item.modifiers && item.modifiers.length > 0 ? (
+                            <ul className="pl-3">
+                              {item.modifiers.map((modifier) => (
+                                <li key={modifier.id}>
+                                  + {modifier.groupName}: {modifier.name}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
                         </div>
                       ))}
                     </div>

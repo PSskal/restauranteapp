@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OrderStatus, Role } from "@prisma/client";
+import { OrderItemStatus, OrderStatus, Role } from "@prisma/client";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -105,31 +105,74 @@ export async function PATCH(
       );
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: {
-        id: order.id,
-      },
-      data: {
-        status,
-      },
-      include: {
-        table: {
-          select: {
-            id: true,
-            number: true,
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status },
+      });
+
+      // Propaga estado de la orden a los items cuando tenga sentido
+      if (status === OrderStatus.PREPARING) {
+        await tx.orderItem.updateMany({
+          where: {
+            orderId: order.id,
+            status: OrderItemStatus.PENDING,
+          },
+          data: { status: OrderItemStatus.IN_PROGRESS },
+        });
+      } else if (status === OrderStatus.READY) {
+        const now = new Date();
+        await tx.orderItem.updateMany({
+          where: {
+            orderId: order.id,
+            status: {
+              in: [OrderItemStatus.PENDING, OrderItemStatus.IN_PROGRESS],
+            },
+          },
+          data: { status: OrderItemStatus.READY, readyAt: now },
+        });
+      } else if (status === OrderStatus.SERVED) {
+        const now = new Date();
+        await tx.orderItem.updateMany({
+          where: {
+            orderId: order.id,
+            status: { not: OrderItemStatus.CANCELLED },
+          },
+          data: { status: OrderItemStatus.SERVED, servedAt: now },
+        });
+      } else if (status === OrderStatus.CANCELLED) {
+        await tx.orderItem.updateMany({
+          where: { orderId: order.id },
+          data: { status: OrderItemStatus.CANCELLED },
+        });
+      }
+
+      return tx.order.findUniqueOrThrow({
+        where: { id: order.id },
+        include: {
+          table: { select: { id: true, number: true } },
+          items: {
+            select: {
+              id: true,
+              name: true,
+              quantity: true,
+              priceC: true,
+              modifiersPriceC: true,
+              totalC: true,
+              notes: true,
+              status: true,
+              modifiers: {
+                select: {
+                  id: true,
+                  groupName: true,
+                  name: true,
+                  priceDeltaC: true,
+                },
+              },
+            },
           },
         },
-        items: {
-          select: {
-            id: true,
-            name: true,
-            quantity: true,
-            priceC: true,
-            totalC: true,
-            notes: true,
-          },
-        },
-      },
+      });
     });
 
     return NextResponse.json({
@@ -152,8 +195,16 @@ export async function PATCH(
           name: item.name,
           quantity: item.quantity,
           priceC: item.priceC,
+          modifiersPriceC: item.modifiersPriceC,
           totalC: item.totalC,
           notes: item.notes,
+          status: item.status,
+          modifiers: item.modifiers.map((modifier) => ({
+            id: modifier.id,
+            groupName: modifier.groupName,
+            name: modifier.name,
+            priceDeltaC: modifier.priceDeltaC,
+          })),
         })),
       },
     });

@@ -17,6 +17,7 @@ import Image from "next/image";
 
 import { useOrganization } from "@/contexts/organization-context";
 import { PlanGate } from "@/components/plans/plan-gate";
+import { ModifierPickerDialog } from "@/components/pos/modifier-picker-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,22 @@ type Category = {
   itemCount: number;
 };
 
+type PosModifier = {
+  id: string;
+  name: string;
+  priceDeltaC: number;
+};
+
+type PosModifierGroup = {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  position: number;
+  modifiers: PosModifier[];
+};
+
 type PosMenuItem = {
   id: string;
   name: string;
@@ -57,13 +74,25 @@ type PosMenuItem = {
     id: string;
     name: string;
   };
+  modifierGroups: PosModifierGroup[];
+};
+
+type CartItemModifier = {
+  modifierId: string;
+  groupName: string;
+  name: string;
+  priceDeltaC: number;
 };
 
 type CartItem = {
-  id: string;
+  lineId: string;
+  menuItemId: string;
   name: string;
   priceCents: number;
   quantity: number;
+  modifiers: CartItemModifier[];
+  modifiersPriceC: number;
+  notes?: string;
 };
 
 type TableSummary = {
@@ -123,9 +152,10 @@ export function PosTerminal() {
       };
       const menuJson = (await menuResponse.json()) as {
         menuItems: Array<
-          PosMenuItem & {
+          Omit<PosMenuItem, "modifierGroups"> & {
             price: number;
             active: boolean;
+            modifierGroups?: PosModifierGroup[];
           }
         >;
       };
@@ -139,6 +169,7 @@ export function PosTerminal() {
           priceCents: item.priceCents,
           imageUrl: item.imageUrl ?? null,
           category: item.category,
+          modifierGroups: item.modifierGroups ?? [],
         })),
       );
       setSelectedCategory("all");
@@ -230,37 +261,100 @@ export function PosTerminal() {
   );
 
   const cartTotalC = useMemo(
-    () => cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0),
+    () =>
+      cart.reduce(
+        (sum, item) =>
+          sum + (item.priceCents + item.modifiersPriceC) * item.quantity,
+        0,
+      ),
     [cart],
   );
 
-  const handleAddToCart = useCallback((item: PosMenuItem) => {
-    setCart((prev) => {
-      const existing = prev.find((entry) => entry.id === item.id);
-      if (existing) {
-        return prev.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, quantity: entry.quantity + 1 }
-            : entry,
+  const [modifierDialogItem, setModifierDialogItem] =
+    useState<PosMenuItem | null>(null);
+
+  const commitCartItem = useCallback(
+    (
+      item: PosMenuItem,
+      modifiers: CartItemModifier[],
+      quantity: number,
+      notes?: string,
+    ) => {
+      if (quantity < 1) return;
+      const modifiersPriceC = modifiers.reduce(
+        (sum, modifier) => sum + modifier.priceDeltaC,
+        0,
+      );
+      const modifierKey = modifiers
+        .map((modifier) => modifier.modifierId)
+        .slice()
+        .sort()
+        .join("|");
+
+      setCart((prev) => {
+        const existingIndex = prev.findIndex(
+          (entry) =>
+            entry.menuItemId === item.id &&
+            entry.modifiers
+              .map((m) => m.modifierId)
+              .slice()
+              .sort()
+              .join("|") === modifierKey &&
+            (entry.notes ?? "") === (notes ?? ""),
         );
+        if (existingIndex >= 0 && modifiers.length === 0 && !notes) {
+          return prev.map((entry, index) =>
+            index === existingIndex
+              ? { ...entry, quantity: entry.quantity + quantity }
+              : entry,
+          );
+        }
+        return [
+          ...prev,
+          {
+            lineId: `${item.id}-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 7)}`,
+            menuItemId: item.id,
+            name: item.name,
+            priceCents: item.priceCents,
+            quantity,
+            modifiers,
+            modifiersPriceC,
+            notes,
+          },
+        ];
+      });
+    },
+    [],
+  );
+
+  const handleAddToCart = useCallback(
+    (item: PosMenuItem) => {
+      if ((item.modifierGroups ?? []).length > 0) {
+        setModifierDialogItem(item);
+        return;
       }
-      return [
-        ...prev,
-        {
-          id: item.id,
-          name: item.name,
-          priceCents: item.priceCents,
-          quantity: 1,
-        },
-      ];
-    });
+      commitCartItem(item, [], 1);
+    },
+    [commitCartItem],
+  );
+
+  const increaseLine = useCallback((lineId: string) => {
+    setCart((prev) =>
+      prev.map((entry) =>
+        entry.lineId === lineId
+          ? { ...entry, quantity: entry.quantity + 1 }
+          : entry,
+      ),
+    );
   }, []);
 
-  const decreaseQuantity = useCallback((itemId: string) => {
+  const decreaseLine = useCallback((lineId: string) => {
     setCart((prev) =>
       prev
         .map((entry) =>
-          entry.id === itemId
+          entry.lineId === lineId
             ? { ...entry, quantity: Math.max(entry.quantity - 1, 0) }
             : entry,
         )
@@ -296,8 +390,10 @@ export function PosTerminal() {
           },
           body: JSON.stringify({
             items: cart.map((entry) => ({
-              menuItemId: entry.id,
+              menuItemId: entry.menuItemId,
               quantity: entry.quantity,
+              notes: entry.notes || undefined,
+              modifierIds: entry.modifiers.map((modifier) => modifier.modifierId),
             })),
             notes: orderNotes.trim() || undefined,
             tableId: selectedTableId || undefined,
@@ -449,16 +545,34 @@ export function PosTerminal() {
           <div class="items">
             <div style="font-weight: bold; margin-bottom: 8px;">DETALLE:</div>
             ${cart
-              .map(
-                (item) => `
+              .map((item) => {
+                const unit = item.priceCents + item.modifiersPriceC;
+                const modifiersHtml = item.modifiers
+                  .map(
+                    (modifier) =>
+                      `<div style="font-size: 10px; padding-left: 10px;">+ ${modifier.name}${
+                        modifier.priceDeltaC !== 0
+                          ? ` (${modifier.priceDeltaC > 0 ? "+" : ""}S/ ${(
+                              modifier.priceDeltaC / 100
+                            ).toFixed(2)})`
+                          : ""
+                      }</div>`,
+                  )
+                  .join("");
+                const notesHtml = item.notes
+                  ? `<div style="font-size: 10px; padding-left: 10px; font-style: italic;">* ${item.notes}</div>`
+                  : "";
+                return `
               <div class="item">
                 <div class="item-header">
                   <span>${item.quantity}x ${item.name}</span>
-                  <span>S/ ${((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
+                  <span>S/ ${((unit * item.quantity) / 100).toFixed(2)}</span>
                 </div>
+                ${modifiersHtml}
+                ${notesHtml}
               </div>
-            `,
-              )
+            `;
+              })
               .join("")}
           </div>
 
@@ -533,6 +647,18 @@ export function PosTerminal() {
 
   return (
     <>
+      <ModifierPickerDialog
+        item={modifierDialogItem}
+        open={modifierDialogItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setModifierDialogItem(null);
+        }}
+        onConfirm={({ modifiers, quantity, notes }) => {
+          if (!modifierDialogItem) return;
+          commitCartItem(modifierDialogItem, modifiers, quantity, notes);
+          setModifierDialogItem(null);
+        }}
+      />
       <Dialog open={isTableDialogOpen} onOpenChange={setIsTableDialogOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -661,8 +787,17 @@ export function PosTerminal() {
                   </div>
                 ) : (
                   filteredItems.map((item) => {
-                    const cartItem = cart.find((c) => c.id === item.id);
-                    const isInCart = cartItem && cartItem.quantity > 0;
+                    const cartEntries = cart.filter(
+                      (c) => c.menuItemId === item.id,
+                    );
+                    const cartQuantity = cartEntries.reduce(
+                      (sum, entry) => sum + entry.quantity,
+                      0,
+                    );
+                    const isInCart = cartQuantity > 0;
+                    const simpleEntry =
+                      cartEntries.find((entry) => entry.modifiers.length === 0) ??
+                      null;
 
                     return (
                       <Card
@@ -693,51 +828,42 @@ export function PosTerminal() {
                                 </span>
                               </div>
                               <div className="flex justify-end">
-                                {(() => {
-                                  const cartItem = cart.find(
-                                    (c) => c.id === item.id,
-                                  );
-                                  const quantity = cartItem?.quantity || 0;
-
-                                  if (quantity === 0) {
-                                    return (
-                                      <Button
-                                        size="sm"
-                                        className="h-8 px-3 text-xs"
-                                        onClick={() => handleAddToCart(item)}
-                                      >
-                                        <Plus className="h-3 w-3 mr-1" />
-                                        Agregar
-                                      </Button>
-                                    );
-                                  }
-
-                                  return (
-                                    <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 hover:bg-white rounded-full"
-                                        onClick={() =>
-                                          decreaseQuantity(item.id)
-                                        }
-                                      >
-                                        <Minus className="h-3 w-3" />
-                                      </Button>
-                                      <span className="w-8 text-center text-sm font-semibold">
-                                        {quantity}
-                                      </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 hover:bg-white rounded-full"
-                                        onClick={() => handleAddToCart(item)}
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  );
-                                })()}
+                                {cartQuantity === 0 || !simpleEntry ? (
+                                  <Button
+                                    size="sm"
+                                    className="h-8 px-3 text-xs"
+                                    onClick={() => handleAddToCart(item)}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    {item.modifierGroups.length > 0
+                                      ? "Personalizar"
+                                      : "Agregar"}
+                                  </Button>
+                                ) : (
+                                  <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 hover:bg-white rounded-full"
+                                      onClick={() =>
+                                        decreaseLine(simpleEntry.lineId)
+                                      }
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className="w-8 text-center text-sm font-semibold">
+                                      {cartQuantity}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 hover:bg-white rounded-full"
+                                      onClick={() => handleAddToCart(item)}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -819,26 +945,66 @@ export function PosTerminal() {
                   sumar al carrito.
                 </p>
               ) : (
-                cart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-start"
-                  >
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="font-semibold text-sm">{item.name}</h4>
-                        <span className="font-semibold text-sm ml-2">
-                          {formatCurrency(item.priceCents * item.quantity)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">
-                          {item.quantity}x item
-                        </span>
+                cart.map((item) => {
+                  const unit = item.priceCents + item.modifiersPriceC;
+                  return (
+                    <div
+                      key={item.lineId}
+                      className="flex justify-between items-start"
+                    >
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="font-semibold text-sm">{item.name}</h4>
+                          <span className="font-semibold text-sm ml-2">
+                            {formatCurrency(unit * item.quantity)}
+                          </span>
+                        </div>
+                        {item.modifiers.length > 0 ? (
+                          <ul className="mb-1 space-y-0.5 text-xs text-gray-500">
+                            {item.modifiers.map((modifier) => (
+                              <li key={modifier.modifierId}>
+                                + {modifier.name}
+                                {modifier.priceDeltaC !== 0
+                                  ? ` (${modifier.priceDeltaC > 0 ? "+" : ""}${formatCurrency(
+                                      modifier.priceDeltaC,
+                                    )})`
+                                  : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {item.notes ? (
+                          <p className="mb-1 text-xs italic text-gray-500">
+                            * {item.notes}
+                          </p>
+                        ) : null}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">
+                            {item.quantity}x
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => decreaseLine(item.lineId)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => increaseLine(item.lineId)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -982,28 +1148,63 @@ export function PosTerminal() {
                       No hay productos en el carrito
                     </p>
                   ) : (
-                    cart.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex justify-between items-start"
-                      >
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start mb-1">
-                            <h4 className="font-semibold text-sm">
-                              {item.name}
-                            </h4>
-                            <span className="font-semibold text-sm ml-2">
-                              {formatCurrency(item.priceCents * item.quantity)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-500">
-                              {item.quantity}x item
-                            </span>
+                    cart.map((item) => {
+                      const unit = item.priceCents + item.modifiersPriceC;
+                      return (
+                        <div
+                          key={item.lineId}
+                          className="flex justify-between items-start"
+                        >
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="font-semibold text-sm">
+                                {item.name}
+                              </h4>
+                              <span className="font-semibold text-sm ml-2">
+                                {formatCurrency(unit * item.quantity)}
+                              </span>
+                            </div>
+                            {item.modifiers.length > 0 ? (
+                              <ul className="mb-1 space-y-0.5 text-xs text-gray-500">
+                                {item.modifiers.map((modifier) => (
+                                  <li key={modifier.modifierId}>
+                                    + {modifier.name}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {item.notes ? (
+                              <p className="mb-1 text-xs italic text-gray-500">
+                                * {item.notes}
+                              </p>
+                            ) : null}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">
+                                {item.quantity}x
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => decreaseLine(item.lineId)}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => increaseLine(item.lineId)}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 

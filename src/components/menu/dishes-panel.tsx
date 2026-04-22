@@ -31,6 +31,7 @@ import {
   MoreVertical,
   Plus,
   Search,
+  Settings2,
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
@@ -65,6 +66,7 @@ interface DishesPanelProps {
   onEditMenuItem: (menuItem: MenuItemData) => void;
   onToggleMenuItem: (menuItemId: string, active: boolean) => void;
   onDeleteMenuItem: (menuItemId: string) => void;
+  onEditModifiers?: (menuItem: MenuItemData) => void;
   onCreateCategory?: () => void;
   onEditCategory?: (categoryId: string) => void;
   onDeleteCategory?: (categoryId: string) => void;
@@ -81,6 +83,7 @@ export function DishesPanel({
   onEditMenuItem,
   onToggleMenuItem,
   onDeleteMenuItem,
+  onEditModifiers,
   onCreateCategory,
   onEditCategory,
   onDeleteCategory,
@@ -302,6 +305,14 @@ export function DishesPanel({
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar plato
                               </DropdownMenuItem>
+                              {onEditModifiers ? (
+                                <DropdownMenuItem
+                                  onClick={() => onEditModifiers(dish)}
+                                >
+                                  <Settings2 className="mr-2 h-4 w-4" />
+                                  Modificadores
+                                </DropdownMenuItem>
+                              ) : null}
                               <DropdownMenuItem
                                 onClick={() =>
                                   onToggleMenuItem(dish.id, !dish.active)

@@ -80,6 +80,7 @@ export async function GET(
         priceCents: item.priceCents,
         imageUrl: item.imageUrl,
         active: item.active,
+        outOfStock: item.outOfStock,
         category: item.category,
         modifierGroups: item.modifierGroups.map((group) => ({
           id: group.id,

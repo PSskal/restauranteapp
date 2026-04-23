@@ -11,12 +11,16 @@ import {
   ChefHat,
   DollarSign,
   Loader2,
+  Percent,
   Plus,
   Printer,
   RefreshCcw,
   UtensilsCrossed,
   XCircle,
 } from "lucide-react";
+
+import { DiscountDialog } from "@/components/orders/discount-dialog";
+import { PaymentDialog } from "@/components/orders/payment-dialog";
 
 import { useOrganization } from "@/contexts/organization-context";
 import { fetcher } from "@/lib/utils";
@@ -67,15 +71,40 @@ type StaffOrderItem = {
   modifiers?: StaffOrderItemModifier[];
 };
 
+type OrderDiscount = {
+  id: string;
+  type: "PERCENT" | "FIXED" | "COMP";
+  valueBp: number | null;
+  amountC: number;
+  reason: string;
+  orderItemId: string | null;
+  createdAt: string;
+};
+
+type OrderPayment = {
+  id: string;
+  method: "CASH" | "CARD";
+  amountC: number;
+  tipC: number;
+  createdAt: string;
+};
+
 type StaffOrder = {
   id: string;
   number: number;
   status: OrderStatus;
   totalC: number;
+  discountsC?: number;
+  netDueC?: number;
+  paidC?: number;
+  tipsC?: number;
+  remainingC?: number;
   createdAt: string;
   updatedAt: string;
   notes: string | null;
   isPaid: boolean;
+  discounts?: OrderDiscount[];
+  payments?: OrderPayment[];
   table: {
     id: string;
     number: number;
@@ -152,7 +181,8 @@ export function OrdersDashboard() {
   const { currentOrg, isLoading: isOrgLoading } = useOrganization();
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
-  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [paymentOrder, setPaymentOrder] = useState<StaffOrder | null>(null);
+  const [discountOrder, setDiscountOrder] = useState<StaffOrder | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const currentOrgId = currentOrg?.id ?? null;
@@ -433,42 +463,31 @@ export function OrdersDashboard() {
     [currentOrgId, refreshOrders]
   );
 
-  const handleRegisterPayment = useCallback(
-    async (orderId: string) => {
-      if (!currentOrgId) {
-        return;
-      }
+  const handleOpenPayment = useCallback((order: StaffOrder) => {
+    setPaymentOrder(order);
+  }, []);
 
-      setPayingOrderId(orderId);
+  const handleOpenDiscount = useCallback((order: StaffOrder) => {
+    setDiscountOrder(order);
+  }, []);
 
+  const handleRemoveDiscount = useCallback(
+    async (orderId: string, discountId: string) => {
+      if (!currentOrgId) return;
       try {
         const response = await fetch(
-          `/api/organizations/${currentOrgId}/orders/${orderId}/pay`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
+          `/api/organizations/${currentOrgId}/orders/${orderId}/discounts/${discountId}`,
+          { method: "DELETE" }
         );
-
         if (!response.ok) {
           const body = await response.json().catch(() => null);
-          const message =
-            body?.error || "No pudimos registrar el pago del pedido";
-          throw new Error(message);
+          throw new Error(body?.error || "No se pudo eliminar el descuento");
         }
-
-        await refreshOrders("Pedido marcado como pagado");
-      } catch (paymentError) {
-        console.error("Error registering payment:", paymentError);
+        await refreshOrders("Descuento eliminado");
+      } catch (err) {
         toast.error(
-          paymentError instanceof Error
-            ? paymentError.message
-            : "Error al registrar el pago"
+          err instanceof Error ? err.message : "Error eliminando descuento"
         );
-      } finally {
-        setPayingOrderId(null);
       }
     },
     [currentOrgId, refreshOrders]
@@ -595,9 +614,10 @@ export function OrdersDashboard() {
             orders={ordersByStatus[status]}
             onStatusChange={handleStatusUpdate}
             updatingOrderId={updatingOrderId}
-            onRegisterPayment={handleRegisterPayment}
+            onRegisterPayment={handleOpenPayment}
+            onApplyDiscount={handleOpenDiscount}
+            onRemoveDiscount={handleRemoveDiscount}
             onPrintPrecheck={handlePrintPrecheck}
-            payingOrderId={payingOrderId}
           />
         ))}
       </div>
@@ -633,9 +653,10 @@ export function OrdersDashboard() {
                   order={order}
                   updating={updatingOrderId === order.id}
                   onStatusChange={handleStatusUpdate}
-                  onRegisterPayment={handleRegisterPayment}
+                  onRegisterPayment={handleOpenPayment}
+                  onApplyDiscount={handleOpenDiscount}
+                  onRemoveDiscount={handleRemoveDiscount}
                   onPrintPrecheck={handlePrintPrecheck}
-                  isPaying={payingOrderId === order.id}
                 />
               ))}
             </div>
@@ -646,8 +667,40 @@ export function OrdersDashboard() {
       <HistorySection
         served={ordersByStatus.SERVED}
         cancelled={ordersByStatus.CANCELLED}
-        onRegisterPayment={handleRegisterPayment}
-        payingOrderId={payingOrderId}
+        onRegisterPayment={handleOpenPayment}
+        onApplyDiscount={handleOpenDiscount}
+        onRemoveDiscount={handleRemoveDiscount}
+      />
+
+      <PaymentDialog
+        open={paymentOrder !== null}
+        onOpenChange={(open) => {
+          if (!open) setPaymentOrder(null);
+        }}
+        orgId={currentOrgId ?? ""}
+        orderId={paymentOrder?.id ?? null}
+        netDueC={paymentOrder?.netDueC ?? paymentOrder?.totalC ?? 0}
+        paidC={paymentOrder?.paidC ?? 0}
+        onPaid={() => refreshOrders()}
+      />
+
+      <DiscountDialog
+        open={discountOrder !== null}
+        onOpenChange={(open) => {
+          if (!open) setDiscountOrder(null);
+        }}
+        orgId={currentOrgId ?? ""}
+        orderId={discountOrder?.id ?? null}
+        netDueC={
+          discountOrder
+            ? Math.max(
+                0,
+                (discountOrder.netDueC ?? discountOrder.totalC) -
+                  (discountOrder.paidC ?? 0)
+              )
+            : 0
+        }
+        onApplied={() => refreshOrders()}
       />
     </div>
   );
@@ -673,9 +726,10 @@ type OrderColumnProps = {
   orders: StaffOrder[];
   updatingOrderId: string | null;
   onStatusChange: (orderId: string, status: OrderStatus) => void;
-  onRegisterPayment: (orderId: string) => void;
+  onRegisterPayment: (order: StaffOrder) => void;
+  onApplyDiscount: (order: StaffOrder) => void;
+  onRemoveDiscount: (orderId: string, discountId: string) => void;
   onPrintPrecheck: (order: StaffOrder) => void;
-  payingOrderId: string | null;
 };
 
 function OrderColumn({
@@ -685,8 +739,9 @@ function OrderColumn({
   updatingOrderId,
   onStatusChange,
   onRegisterPayment,
+  onApplyDiscount,
+  onRemoveDiscount,
   onPrintPrecheck,
-  payingOrderId,
 }: OrderColumnProps) {
   return (
     <Card className="flex flex-col">
@@ -707,8 +762,9 @@ function OrderColumn({
               updating={updatingOrderId === order.id}
               onStatusChange={onStatusChange}
               onRegisterPayment={onRegisterPayment}
+              onApplyDiscount={onApplyDiscount}
+              onRemoveDiscount={onRemoveDiscount}
               onPrintPrecheck={onPrintPrecheck}
-              isPaying={payingOrderId === order.id}
             />
           ))
         )}
@@ -721,9 +777,10 @@ type OrderCardProps = {
   order: StaffOrder;
   updating: boolean;
   onStatusChange: (orderId: string, status: OrderStatus) => void;
-  onRegisterPayment: (orderId: string) => void;
+  onRegisterPayment: (order: StaffOrder) => void;
+  onApplyDiscount: (order: StaffOrder) => void;
+  onRemoveDiscount: (orderId: string, discountId: string) => void;
   onPrintPrecheck: (order: StaffOrder) => void;
-  isPaying: boolean;
 };
 
 function OrderCard({
@@ -731,10 +788,16 @@ function OrderCard({
   updating,
   onStatusChange,
   onRegisterPayment,
+  onApplyDiscount,
+  onRemoveDiscount,
   onPrintPrecheck,
-  isPaying,
 }: OrderCardProps) {
   const nextStatuses = statusTransitions[order.status] || [];
+  const discountsC = order.discountsC ?? 0;
+  const netDueC = order.netDueC ?? order.totalC;
+  const paidC = order.paidC ?? 0;
+  const tipsC = order.tipsC ?? 0;
+  const remainingC = order.remainingC ?? Math.max(0, netDueC - paidC);
 
   return (
     <div className="space-y-4 rounded-xl border p-4 shadow-sm">
@@ -805,36 +868,117 @@ function OrderCard({
         </div>
       ) : null}
 
-      {/* Botón manual para imprimir precuenta - Solo visible en READY y SERVED */}
-      {(order.status === "READY" || order.status === "SERVED") && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2"
-          onClick={() => onPrintPrecheck(order)}
-          disabled={updating}
-        >
-          <Printer className="h-4 w-4" />
-          Imprimir Precuenta
-        </Button>
-      )}
-
-      {!order.isPaid ? (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="flex items-center gap-2"
-          onClick={() => onRegisterPayment(order.id)}
-          disabled={updating || isPaying}
-        >
-          {isPaying ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <DollarSign className="h-4 w-4" />
-          )}
-          Registrar pago
-        </Button>
+      {order.discounts && order.discounts.length > 0 ? (
+        <div className="space-y-1 rounded-md bg-amber-50 p-2 text-xs">
+          <p className="font-semibold text-amber-900">Descuentos</p>
+          {order.discounts.map((discount) => (
+            <div
+              key={discount.id}
+              className="flex items-center justify-between gap-2 text-amber-900"
+            >
+              <span className="truncate">
+                {discount.type === "PERCENT"
+                  ? `${((discount.valueBp ?? 0) / 100).toFixed(0)}%`
+                  : discount.type === "COMP"
+                    ? "Cortesía"
+                    : "Monto"}
+                {" — "}
+                <span className="italic">{discount.reason}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="font-semibold">
+                  -{formatCurrency(discount.amountC)}
+                </span>
+                <button
+                  type="button"
+                  className="text-amber-700 hover:text-destructive"
+                  onClick={() => onRemoveDiscount(order.id, discount.id)}
+                  disabled={updating}
+                  aria-label="Eliminar descuento"
+                >
+                  <XCircle className="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
       ) : null}
+
+      <div className="space-y-1 rounded-md border bg-muted/30 p-2 text-xs">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span>{formatCurrency(order.totalC)}</span>
+        </div>
+        {discountsC > 0 ? (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Descuentos</span>
+            <span className="text-destructive">
+              -{formatCurrency(discountsC)}
+            </span>
+          </div>
+        ) : null}
+        {paidC > 0 ? (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Pagado</span>
+            <span>{formatCurrency(paidC)}</span>
+          </div>
+        ) : null}
+        {tipsC > 0 ? (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Propina cobrada</span>
+            <span>{formatCurrency(tipsC)}</span>
+          </div>
+        ) : null}
+        <div className="flex justify-between border-t pt-1 font-semibold">
+          <span>Saldo</span>
+          <span
+            className={remainingC === 0 ? "text-emerald-600" : "text-amber-700"}
+          >
+            {formatCurrency(remainingC)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(order.status === "READY" || order.status === "SERVED") && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => onPrintPrecheck(order)}
+            disabled={updating}
+          >
+            <Printer className="h-4 w-4" />
+            Precuenta
+          </Button>
+        )}
+
+        {!order.isPaid && remainingC > 0 ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => onApplyDiscount(order)}
+            disabled={updating}
+          >
+            <Percent className="h-4 w-4" />
+            Descuento
+          </Button>
+        ) : null}
+
+        {!order.isPaid && remainingC > 0 ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => onRegisterPayment(order)}
+            disabled={updating}
+          >
+            <DollarSign className="h-4 w-4" />
+            Cobrar
+          </Button>
+        ) : null}
+      </div>
 
       {nextStatuses.length > 0 ? (
         <div className="flex flex-wrap gap-2">
@@ -870,16 +1014,22 @@ function OrderCard({
 type HistorySectionProps = {
   served: StaffOrder[];
   cancelled: StaffOrder[];
-  onRegisterPayment: (orderId: string) => void;
-  payingOrderId: string | null;
+  onRegisterPayment: (order: StaffOrder) => void;
+  onApplyDiscount: (order: StaffOrder) => void;
+  onRemoveDiscount: (orderId: string, discountId: string) => void;
 };
 
 function HistorySection({
   served,
   cancelled,
   onRegisterPayment,
-  payingOrderId,
+  onApplyDiscount,
+  onRemoveDiscount,
 }: HistorySectionProps) {
+  // Dejamos referenciadas las props de descuento aunque el historial hoy
+  // sólo las necesita cuando se agregue soporte directo.
+  void onApplyDiscount;
+  void onRemoveDiscount;
   return (
     <Card>
       <CardHeader>
@@ -935,20 +1085,15 @@ function HistorySection({
                       <span className="text-sm font-semibold text-green-600">
                         {formatCurrency(order.totalC)}
                       </span>
-                      {!order.isPaid ? (
+                      {!order.isPaid && (order.remainingC ?? 0) > 0 ? (
                         <Button
                           variant="outline"
                           size="sm"
                           className="text-xs"
-                          onClick={() => onRegisterPayment(order.id)}
-                          disabled={payingOrderId === order.id}
+                          onClick={() => onRegisterPayment(order)}
                         >
-                          {payingOrderId === order.id ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                          ) : (
-                            <DollarSign className="mr-1 h-3 w-3" />
-                          )}
-                          Registrar pago
+                          <DollarSign className="mr-1 h-3 w-3" />
+                          Cobrar ({formatCurrency(order.remainingC ?? 0)})
                         </Button>
                       ) : null}
                     </div>

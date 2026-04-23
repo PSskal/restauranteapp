@@ -41,7 +41,8 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, price, categoryId, active, description, imageUrl } = body;
+    const { name, price, categoryId, active, description, imageUrl, outOfStock } =
+      body;
 
     // Verificar que el item existe y pertenece a la org
     const existingItem = await prisma.menuItem.findFirst({
@@ -98,6 +99,7 @@ export async function PUT(
       categoryId?: string;
       imageUrl?: string | null;
       active?: boolean;
+      outOfStock?: boolean;
     } = {};
 
     if (name !== undefined) {
@@ -117,6 +119,9 @@ export async function PUT(
     }
     if (active !== undefined) {
       updateData.active = active;
+    }
+    if (outOfStock !== undefined) {
+      updateData.outOfStock = Boolean(outOfStock);
     }
 
     // Actualizar el item
@@ -144,6 +149,7 @@ export async function PUT(
         priceCents: updatedItem.priceCents,
         imageUrl: updatedItem.imageUrl,
         active: updatedItem.active,
+        outOfStock: updatedItem.outOfStock,
         category: updatedItem.category,
       },
     });

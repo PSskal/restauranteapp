@@ -182,6 +182,16 @@ export async function POST(
       );
     }
 
+    const soldOutItems = menuItems.filter((mi) => mi.outOfStock);
+    if (soldOutItems.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Agotado: ${soldOutItems.map((i) => i.name).join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+
     const cartItemsResult: Array<{
       menuItemId: string;
       name: string;
@@ -533,7 +543,23 @@ export async function GET(
             },
             payments: {
               select: {
+                id: true,
                 status: true,
+                method: true,
+                amountC: true,
+                tipC: true,
+                createdAt: true,
+              },
+            },
+            discounts: {
+              select: {
+                id: true,
+                type: true,
+                valueBp: true,
+                amountC: true,
+                reason: true,
+                orderItemId: true,
+                createdAt: true,
               },
             },
           },
@@ -588,19 +614,52 @@ export async function GET(
 
     return NextResponse.json({
       orders: orders.map((order) => {
-        const isPaid = order.payments.some(
-          (payment) => payment.status === PaymentStatus.PAID
+        const discountsC = order.discounts.reduce(
+          (sum, d) => sum + d.amountC,
+          0
         );
+        const netDueC = Math.max(0, order.totalC - discountsC);
+        const paidC = order.payments
+          .filter((p) => p.status === PaymentStatus.PAID)
+          .reduce((sum, p) => sum + p.amountC, 0);
+        const tipsC = order.payments
+          .filter((p) => p.status === PaymentStatus.PAID)
+          .reduce((sum, p) => sum + p.tipC, 0);
+        const remainingC = Math.max(0, netDueC - paidC);
+        const isPaid = netDueC === 0 ? false : paidC >= netDueC;
 
         return {
           id: order.id,
           number: order.number,
           status: order.status,
           totalC: order.totalC,
+          discountsC,
+          netDueC,
+          paidC,
+          tipsC,
+          remainingC,
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
           notes: order.notes,
           isPaid,
+          discounts: order.discounts.map((d) => ({
+            id: d.id,
+            type: d.type,
+            valueBp: d.valueBp,
+            amountC: d.amountC,
+            reason: d.reason,
+            orderItemId: d.orderItemId,
+            createdAt: d.createdAt,
+          })),
+          payments: order.payments
+            .filter((p) => p.status === PaymentStatus.PAID)
+            .map((p) => ({
+              id: p.id,
+              method: p.method,
+              amountC: p.amountC,
+              tipC: p.tipC,
+              createdAt: p.createdAt,
+            })),
           table: order.table
             ? {
                 id: order.table.id,

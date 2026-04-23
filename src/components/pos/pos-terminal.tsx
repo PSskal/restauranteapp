@@ -70,6 +70,7 @@ type PosMenuItem = {
   description: string | null;
   priceCents: number;
   imageUrl: string | null;
+  outOfStock: boolean;
   category: {
     id: string;
     name: string;
@@ -152,9 +153,10 @@ export function PosTerminal() {
       };
       const menuJson = (await menuResponse.json()) as {
         menuItems: Array<
-          Omit<PosMenuItem, "modifierGroups"> & {
+          Omit<PosMenuItem, "modifierGroups" | "outOfStock"> & {
             price: number;
             active: boolean;
+            outOfStock?: boolean;
             modifierGroups?: PosModifierGroup[];
           }
         >;
@@ -168,6 +170,7 @@ export function PosTerminal() {
           description: item.description ?? null,
           priceCents: item.priceCents,
           imageUrl: item.imageUrl ?? null,
+          outOfStock: Boolean(item.outOfStock),
           category: item.category,
           modifierGroups: item.modifierGroups ?? [],
         })),
@@ -331,6 +334,10 @@ export function PosTerminal() {
 
   const handleAddToCart = useCallback(
     (item: PosMenuItem) => {
+      if (item.outOfStock) {
+        toast.error(`"${item.name}" está agotado hoy`);
+        return;
+      }
       if ((item.modifierGroups ?? []).length > 0) {
         setModifierDialogItem(item);
         return;
@@ -803,7 +810,11 @@ export function PosTerminal() {
                       <Card
                         key={item.id}
                         className={`p-4 bg-white hover:bg-gray-50 transition-all duration-200 border-2 ${
-                          isInCart ? "border-gray-600" : "border-gray-200"
+                          item.outOfStock
+                            ? "border-red-200 opacity-60"
+                            : isInCart
+                              ? "border-gray-600"
+                              : "border-gray-200"
                         }`}
                       >
                         <div className="flex gap-4">
@@ -828,7 +839,14 @@ export function PosTerminal() {
                                 </span>
                               </div>
                               <div className="flex justify-end">
-                                {cartQuantity === 0 || !simpleEntry ? (
+                                {item.outOfStock ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-red-200 bg-red-50 text-red-700"
+                                  >
+                                    Agotado
+                                  </Badge>
+                                ) : cartQuantity === 0 || !simpleEntry ? (
                                   <Button
                                     size="sm"
                                     className="h-8 px-3 text-xs"

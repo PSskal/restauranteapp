@@ -32,6 +32,7 @@ interface MenuItem {
   name: string;
   price: number;
   active: boolean;
+  outOfStock?: boolean;
   description?: string;
   imageUrl?: string;
   category: {
@@ -177,6 +178,34 @@ export default function MenuPage() {
       toast.error("Error de conexion", {
         description: "No se pudo conectar con el servidor.",
       });
+    }
+  };
+
+  const handleToggleOutOfStock = async (itemId: string, outOfStock: boolean) => {
+    if (!currentOrg) return;
+    try {
+      const response = await fetch(
+        `/api/organizations/${currentOrg.id}/menu-items/${itemId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ outOfStock }),
+        }
+      );
+
+      if (response.ok) {
+        handleDataRefresh();
+        toast.success(outOfStock ? "Plato marcado agotado" : "Plato con stock", {
+          description: outOfStock
+            ? "Se bloqueará al intentar pedirlo."
+            : "Vuelve a estar disponible.",
+        });
+      } else {
+        toast.error("No se pudo actualizar el stock");
+      }
+    } catch (error) {
+      console.error("Error toggling out of stock:", error);
+      toast.error("Error de conexión");
     }
   };
 
@@ -385,6 +414,7 @@ export default function MenuPage() {
               handleEditMenuItem(convertedItem);
             }}
             onToggleMenuItem={handleToggleItemActive}
+            onToggleOutOfStock={handleToggleOutOfStock}
             onDeleteMenuItem={handleDeleteMenuItem}
             onEditModifiers={(menuItem) => {
               setModifierTarget({ id: menuItem.id, name: menuItem.name });

@@ -55,6 +55,13 @@ enum PlanTier {
   PREMIUM
 }
 
+// Tipo de descuento aplicado a orden o a un ítem
+enum DiscountType {
+  PERCENT // valueBp = puntos básicos (1500 = 15%)
+  FIXED // monto fijo en centavos
+  COMP // cortesía (100% del ítem u orden, con motivo)
+}
+
 // =============== Auth.js Models (Required) ===============
 model User {
   id            String    @id @default(cuid())
@@ -69,9 +76,10 @@ model User {
   sessions Session[]
 
   // Business relations
-  memberships   Membership[]
-  ownedOrgs     Organization[] @relation("OrganizationOwner")
-  createdOrders Order[]
+  memberships      Membership[]
+  ownedOrgs        Organization[] @relation("OrganizationOwner")
+  createdOrders    Order[]
+  appliedDiscounts Discount[]     @relation("DiscountAppliedBy")
 }
 
 model Account {
@@ -212,6 +220,7 @@ model MenuItem {
   priceCents     Int // Precio en centavos (evita flotantes)
   imageUrl       String? // URL de la imagen del producto
   active         Boolean         @default(true) // Para ocultar temporalmente de la carta
+  outOfStock     Boolean         @default(false) // 86'd: sin stock hoy (visible pero bloqueado al agregar)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   org            Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -275,8 +284,9 @@ model Order {
   table     Table?       @relation(fields: [tableId], references: [id], onDelete: SetNull)
   createdBy User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  items    OrderItem[]
-  payments Payment[]
+  items     OrderItem[]
+  payments  Payment[]
+  discounts Discount[]
 
   @@unique([orgId, number]) // Número único por restaurante
   @@index([orgId, status]) // Filtros comunes: por org y estado
@@ -300,6 +310,7 @@ model OrderItem {
   order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem  MenuItem            @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
   modifiers OrderItemModifier[]
+  discounts Discount[]
 
   @@index([orderId])
   @@index([orderId, status])
@@ -326,10 +337,33 @@ model Payment {
   orderId   String
   method    PaymentMethod
   status    PaymentStatus @default(PENDING)
-  amountC   Int
+  amountC   Int // Monto cobrado en centavos (sin propina)
+  tipC      Int           @default(0) // Propina asociada a este pago (centavos)
   createdAt DateTime      @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// Descuento aplicado a una orden completa o a un ítem específico
+model Discount {
+  id          String       @id @default(cuid())
+  orderId     String
+  orderItemId String? // null = aplica a toda la orden
+  type        DiscountType
+  valueBp     Int? // puntos básicos si type = PERCENT (1500 = 15%)
+  amountC     Int // monto realmente descontado en centavos (calculado al crearse)
+  reason      String
+  appliedById String?
+  createdAt   DateTime     @default(now())
+
+  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  appliedBy User?      @relation("DiscountAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([orderItemId])
 }
 
 model Branding {

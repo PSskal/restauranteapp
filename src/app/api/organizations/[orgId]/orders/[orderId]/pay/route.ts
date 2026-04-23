@@ -9,8 +9,14 @@ const paySchema = z.object({
   method: z.nativeEnum(PaymentMethod).optional(),
   amountC: z
     .number()
-    .int("El monto debe ser entero en centimos")
+    .int("El monto debe ser entero en centavos")
     .positive("El monto debe ser mayor a 0")
+    .optional(),
+  tipC: z
+    .number()
+    .int("La propina debe ser entera en centavos")
+    .min(0, "La propina no puede ser negativa")
+    .max(1_000_000, "Propina demasiado alta")
     .optional(),
 });
 
@@ -32,21 +38,19 @@ export async function POST(
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Datos invalidos", details: parsed.error.flatten() },
+        { error: "Datos inválidos", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
-    const { method = PaymentMethod.CASH, amountC } = parsed.data;
+    const { method = PaymentMethod.CASH, amountC, tipC = 0 } = parsed.data;
 
     const [membership, organization] = await Promise.all([
       prisma.membership.findFirst({
         where: {
           userId: session.user.id,
           orgId,
-          role: {
-            in: ALLOWED_ROLES,
-          },
+          role: { in: ALLOWED_ROLES },
         },
       }),
       prisma.organization.findUnique({
@@ -65,16 +69,10 @@ export async function POST(
     }
 
     const order = await prisma.order.findFirst({
-      where: {
-        id: orderId,
-        orgId,
-      },
+      where: { id: orderId, orgId },
       include: {
         payments: true,
-        table: {
-          select: { id: true, number: true },
-        },
-        items: true,
+        discounts: { select: { amountC: true } },
       },
     });
 
@@ -85,11 +83,14 @@ export async function POST(
       );
     }
 
+    const discountsC = order.discounts.reduce((sum, d) => sum + d.amountC, 0);
+    const netDueC = Math.max(0, order.totalC - discountsC);
+
     const paidAmount = order.payments
       .filter((payment) => payment.status === PaymentStatus.PAID)
       .reduce((acc, payment) => acc + payment.amountC, 0);
 
-    const remainingAmount = Math.max(order.totalC - paidAmount, 0);
+    const remainingAmount = Math.max(netDueC - paidAmount, 0);
 
     if (remainingAmount === 0) {
       return NextResponse.json(
@@ -103,12 +104,15 @@ export async function POST(
     if (finalAmount > remainingAmount) {
       return NextResponse.json(
         {
-          error: `El monto excede el saldo pendiente (${remainingAmount / 100}s)`,
+          error: `El monto excede el saldo pendiente (S/ ${(
+            remainingAmount / 100
+          ).toFixed(2)})`,
         },
         { status: 400 }
       );
     }
 
+    // Reutiliza un pago pendiente si existe, sino crea uno nuevo
     const pendingPayment = order.payments.find(
       (payment) => payment.status !== PaymentStatus.PAID
     );
@@ -119,6 +123,7 @@ export async function POST(
         data: {
           method,
           amountC: finalAmount,
+          tipC,
           status: PaymentStatus.PAID,
         },
       });
@@ -128,6 +133,7 @@ export async function POST(
           orderId: order.id,
           method,
           amountC: finalAmount,
+          tipC,
           status: PaymentStatus.PAID,
         },
       });
@@ -136,11 +142,10 @@ export async function POST(
     const updatedOrder = await prisma.order.findUnique({
       where: { id: order.id },
       include: {
-        table: {
-          select: { id: true, number: true },
-        },
+        table: { select: { id: true, number: true } },
         items: true,
         payments: true,
+        discounts: { select: { amountC: true } },
       },
     });
 
@@ -151,12 +156,32 @@ export async function POST(
       );
     }
 
+    const newPaidC = updatedOrder.payments
+      .filter((p) => p.status === PaymentStatus.PAID)
+      .reduce((sum, p) => sum + p.amountC, 0);
+    const newTipsC = updatedOrder.payments
+      .filter((p) => p.status === PaymentStatus.PAID)
+      .reduce((sum, p) => sum + p.tipC, 0);
+    const newDiscountsC = updatedOrder.discounts.reduce(
+      (sum, d) => sum + d.amountC,
+      0
+    );
+    const newNetDueC = Math.max(0, updatedOrder.totalC - newDiscountsC);
+    const isPaid = newPaidC >= newNetDueC && newNetDueC > 0;
+    const remainingC = Math.max(0, newNetDueC - newPaidC);
+
     return NextResponse.json({
       order: {
         id: updatedOrder.id,
         number: updatedOrder.number,
         status: updatedOrder.status,
         totalC: updatedOrder.totalC,
+        discountsC: newDiscountsC,
+        netDueC: newNetDueC,
+        paidC: newPaidC,
+        tipsC: newTipsC,
+        remainingC,
+        isPaid,
         createdAt: updatedOrder.createdAt,
         updatedAt: updatedOrder.updatedAt,
         notes: updatedOrder.notes,
@@ -166,9 +191,6 @@ export async function POST(
               number: updatedOrder.table.number,
             }
           : null,
-        isPaid: updatedOrder.payments.some(
-          (payment) => payment.status === PaymentStatus.PAID
-        ),
         items: updatedOrder.items.map((item) => ({
           id: item.id,
           name: item.name,

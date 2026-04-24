@@ -29,8 +29,10 @@ import {
   ImageIcon,
   List,
   MoreVertical,
+  PackageX,
   Plus,
   Search,
+  Settings2,
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
@@ -51,6 +53,7 @@ interface MenuItemData {
   name: string;
   price: number;
   active: boolean;
+  outOfStock?: boolean;
   description?: string;
   imageUrl?: string | null;
   category: MenuItemCategory;
@@ -64,7 +67,9 @@ interface DishesPanelProps {
   onCreateMenuItem: () => void;
   onEditMenuItem: (menuItem: MenuItemData) => void;
   onToggleMenuItem: (menuItemId: string, active: boolean) => void;
+  onToggleOutOfStock?: (menuItemId: string, outOfStock: boolean) => void;
   onDeleteMenuItem: (menuItemId: string) => void;
+  onEditModifiers?: (menuItem: MenuItemData) => void;
   onCreateCategory?: () => void;
   onEditCategory?: (categoryId: string) => void;
   onDeleteCategory?: (categoryId: string) => void;
@@ -80,7 +85,9 @@ export function DishesPanel({
   onCreateMenuItem,
   onEditMenuItem,
   onToggleMenuItem,
+  onToggleOutOfStock,
   onDeleteMenuItem,
+  onEditModifiers,
   onCreateCategory,
   onEditCategory,
   onDeleteCategory,
@@ -302,6 +309,29 @@ export function DishesPanel({
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar plato
                               </DropdownMenuItem>
+                              {onEditModifiers ? (
+                                <DropdownMenuItem
+                                  onClick={() => onEditModifiers(dish)}
+                                >
+                                  <Settings2 className="mr-2 h-4 w-4" />
+                                  Modificadores
+                                </DropdownMenuItem>
+                              ) : null}
+                              {onToggleOutOfStock ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    onToggleOutOfStock(
+                                      dish.id,
+                                      !dish.outOfStock
+                                    )
+                                  }
+                                >
+                                  <PackageX className="mr-2 h-4 w-4" />
+                                  {dish.outOfStock
+                                    ? "Volver a stock"
+                                    : "Marcar agotado"}
+                                </DropdownMenuItem>
+                              ) : null}
                               <DropdownMenuItem
                                 onClick={() =>
                                   onToggleMenuItem(dish.id, !dish.active)
@@ -371,17 +401,27 @@ export function DishesPanel({
                           <div className="mb-2 text-lg font-semibold">
                             ${dish.price.toFixed(2)}
                           </div>
-                          <Badge
-                            variant={dish.active ? "default" : "secondary"}
-                            className={cn(
-                              "text-xs",
-                              dish.active
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-muted text-muted-foreground"
-                            )}
-                          >
-                            {dish.active ? "Activo" : "Inactivo"}
-                          </Badge>
+                          <div className="flex items-center justify-center gap-1 sm:justify-start">
+                            <Badge
+                              variant={dish.active ? "default" : "secondary"}
+                              className={cn(
+                                "text-xs",
+                                dish.active
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              {dish.active ? "Activo" : "Inactivo"}
+                            </Badge>
+                            {dish.outOfStock ? (
+                              <Badge
+                                variant="outline"
+                                className="border-red-200 bg-red-50 text-xs text-red-700"
+                              >
+                                Agotado
+                              </Badge>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>

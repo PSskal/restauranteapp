@@ -58,6 +58,15 @@ export async function GET(
             name: true,
           },
         },
+        modifierGroups: {
+          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+          include: {
+            modifiers: {
+              where: { active: true },
+              orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+            },
+          },
+        },
       },
       orderBy: [{ category: { position: "asc" } }, { name: "asc" }],
     });
@@ -71,7 +80,22 @@ export async function GET(
         priceCents: item.priceCents,
         imageUrl: item.imageUrl,
         active: item.active,
+        outOfStock: item.outOfStock,
         category: item.category,
+        modifierGroups: item.modifierGroups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          required: group.required,
+          minSelect: group.minSelect,
+          maxSelect: group.maxSelect,
+          position: group.position,
+          modifiers: group.modifiers.map((modifier) => ({
+            id: modifier.id,
+            name: modifier.name,
+            priceDeltaC: modifier.priceDeltaC,
+            position: modifier.position,
+          })),
+        })),
       })),
     });
   } catch (error) {

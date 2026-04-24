@@ -13,6 +13,7 @@ import { CreateCategoryModal } from "@/components/menu/create-category-modal";
 import { CreateMenuItemModal } from "@/components/menu/create-menu-item-modal";
 import { EditCategoryModal } from "@/components/menu/edit-category-modal";
 import { EditMenuItemModal } from "@/components/menu/edit-menu-item-modal";
+import { ModifiersModal } from "@/components/menu/modifiers-modal";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useOrganization } from "@/contexts/organization-context";
@@ -31,6 +32,7 @@ interface MenuItem {
   name: string;
   price: number;
   active: boolean;
+  outOfStock?: boolean;
   description?: string;
   imageUrl?: string;
   category: {
@@ -54,6 +56,11 @@ export default function MenuPage() {
   const [showCreateMenuItem, setShowCreateMenuItem] = useState(false);
   const [showEditCategory, setShowEditCategory] = useState(false);
   const [showEditMenuItem, setShowEditMenuItem] = useState(false);
+  const [showModifiers, setShowModifiers] = useState(false);
+  const [modifierTarget, setModifierTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Edit modal data
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
@@ -171,6 +178,34 @@ export default function MenuPage() {
       toast.error("Error de conexion", {
         description: "No se pudo conectar con el servidor.",
       });
+    }
+  };
+
+  const handleToggleOutOfStock = async (itemId: string, outOfStock: boolean) => {
+    if (!currentOrg) return;
+    try {
+      const response = await fetch(
+        `/api/organizations/${currentOrg.id}/menu-items/${itemId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ outOfStock }),
+        }
+      );
+
+      if (response.ok) {
+        handleDataRefresh();
+        toast.success(outOfStock ? "Plato marcado agotado" : "Plato con stock", {
+          description: outOfStock
+            ? "Se bloqueará al intentar pedirlo."
+            : "Vuelve a estar disponible.",
+        });
+      } else {
+        toast.error("No se pudo actualizar el stock");
+      }
+    } catch (error) {
+      console.error("Error toggling out of stock:", error);
+      toast.error("Error de conexión");
     }
   };
 
@@ -379,7 +414,12 @@ export default function MenuPage() {
               handleEditMenuItem(convertedItem);
             }}
             onToggleMenuItem={handleToggleItemActive}
+            onToggleOutOfStock={handleToggleOutOfStock}
             onDeleteMenuItem={handleDeleteMenuItem}
+            onEditModifiers={(menuItem) => {
+              setModifierTarget({ id: menuItem.id, name: menuItem.name });
+              setShowModifiers(true);
+            }}
             onCreateCategory={() => setShowCreateCategory(true)}
             onEditCategory={(categoryId) => {
               const category = categories.find((c) => c.id === categoryId);
@@ -451,6 +491,17 @@ export default function MenuPage() {
         description="Esta accion eliminara permanentemente el producto de tu menu."
         itemName={menuItemToDelete?.name}
         isLoading={isDeletingMenuItem}
+      />
+
+      <ModifiersModal
+        open={showModifiers}
+        onOpenChange={(open) => {
+          setShowModifiers(open);
+          if (!open) setModifierTarget(null);
+        }}
+        organizationId={currentOrg.id}
+        menuItem={modifierTarget}
+        onSaved={handleDataRefresh}
       />
     </div>
   );

@@ -20,6 +20,7 @@ const itemSchema = z.object({
     .min(1, "Minimo 1 unidad")
     .max(20, "Maximo 20 unidades por producto"),
   notes: z.string().trim().max(200, "Maximo 200 caracteres").optional(),
+  modifierIds: z.array(z.string().min(1)).max(30).optional(),
 });
 
 const createOrderSchema = z.object({
@@ -138,6 +139,13 @@ export async function POST(
         orgId,
         active: true,
       },
+      include: {
+        modifierGroups: {
+          include: {
+            modifiers: true,
+          },
+        },
+      },
     });
 
     const { start, end } = currentMonthRange();
@@ -174,28 +182,136 @@ export async function POST(
       );
     }
 
-    const cartItems = items.map((item) => {
-      const menuItem = menuItems.find((mi) => mi.id === item.menuItemId);
+    const soldOutItems = menuItems.filter((mi) => mi.outOfStock);
+    if (soldOutItems.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Agotado: ${soldOutItems.map((i) => i.name).join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
 
+    const cartItemsResult: Array<{
+      menuItemId: string;
+      name: string;
+      quantity: number;
+      priceC: number;
+      modifiersPriceC: number;
+      totalC: number;
+      notes: string | null;
+      modifiers: Array<{
+        modifierId: string;
+        groupName: string;
+        name: string;
+        priceDeltaC: number;
+      }>;
+    }> = [];
+
+    for (const item of items) {
+      const menuItem = menuItems.find((mi) => mi.id === item.menuItemId);
       if (!menuItem) {
         throw new Error("Producto faltante tras validacion");
       }
 
+      const selectedIds = item.modifierIds ?? [];
+      const modifiersById = new Map(
+        menuItem.modifierGroups.flatMap((group) =>
+          group.modifiers.map((modifier) => [
+            modifier.id,
+            { modifier, group },
+          ] as const)
+        )
+      );
+
+      const selectedByGroup = new Map<string, number>();
+      const selectedModifiersSnapshot: Array<{
+        modifierId: string;
+        groupName: string;
+        name: string;
+        priceDeltaC: number;
+      }> = [];
+
+      for (const modifierId of selectedIds) {
+        const entry = modifiersById.get(modifierId);
+        if (!entry) {
+          return NextResponse.json(
+            {
+              error: `Un modificador seleccionado no pertenece a "${menuItem.name}"`,
+            },
+            { status: 400 }
+          );
+        }
+        if (!entry.modifier.active) {
+          return NextResponse.json(
+            {
+              error: `El modificador "${entry.modifier.name}" no está disponible`,
+            },
+            { status: 400 }
+          );
+        }
+        selectedByGroup.set(
+          entry.group.id,
+          (selectedByGroup.get(entry.group.id) ?? 0) + 1
+        );
+        selectedModifiersSnapshot.push({
+          modifierId: entry.modifier.id,
+          groupName: entry.group.name,
+          name: entry.modifier.name,
+          priceDeltaC: entry.modifier.priceDeltaC,
+        });
+      }
+
+      for (const group of menuItem.modifierGroups) {
+        const count = selectedByGroup.get(group.id) ?? 0;
+        if (count < group.minSelect) {
+          return NextResponse.json(
+            {
+              error: `Debes elegir al menos ${group.minSelect} opción(es) en "${group.name}" para ${menuItem.name}`,
+            },
+            { status: 400 }
+          );
+        }
+        if (count > group.maxSelect) {
+          return NextResponse.json(
+            {
+              error: `Máximo ${group.maxSelect} opción(es) en "${group.name}" para ${menuItem.name}`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+
       const quantity = item.quantity;
       const priceC = menuItem.priceCents;
-      const totalC = priceC * quantity;
+      const modifiersPriceC = selectedModifiersSnapshot.reduce(
+        (sum, modifier) => sum + modifier.priceDeltaC,
+        0
+      );
+      const unitPrice = priceC + modifiersPriceC;
+      if (unitPrice < 0) {
+        return NextResponse.json(
+          {
+            error: `El precio final del producto "${menuItem.name}" sería negativo`,
+          },
+          { status: 400 }
+        );
+      }
+      const totalC = unitPrice * quantity;
 
-      return {
+      cartItemsResult.push({
         menuItemId: menuItem.id,
         name: menuItem.name,
         quantity,
         priceC,
+        modifiersPriceC,
         totalC,
         notes: item.notes?.trim() || null,
-      };
-    });
+        modifiers: selectedModifiersSnapshot,
+      });
+    }
 
-    const totalC = cartItems.reduce((sum, item) => sum + item.totalC, 0);
+    const totalC = cartItemsResult.reduce((sum, item) => sum + item.totalC, 0);
 
     // Asegurar que session.user existe y guardar el userId
     if (!session.user?.id) {
@@ -222,7 +338,23 @@ export async function POST(
           totalC,
           createdById: userId,
           items: {
-            create: cartItems,
+            create: cartItemsResult.map((item) => ({
+              menuItemId: item.menuItemId,
+              name: item.name,
+              quantity: item.quantity,
+              priceC: item.priceC,
+              modifiersPriceC: item.modifiersPriceC,
+              totalC: item.totalC,
+              notes: item.notes,
+              modifiers: {
+                create: item.modifiers.map((modifier) => ({
+                  modifierId: modifier.modifierId,
+                  groupName: modifier.groupName,
+                  name: modifier.name,
+                  priceDeltaC: modifier.priceDeltaC,
+                })),
+              },
+            })),
           },
         },
         include: {
@@ -232,8 +364,18 @@ export async function POST(
               name: true,
               quantity: true,
               priceC: true,
+              modifiersPriceC: true,
               totalC: true,
               notes: true,
+              status: true,
+              modifiers: {
+                select: {
+                  id: true,
+                  groupName: true,
+                  name: true,
+                  priceDeltaC: true,
+                },
+              },
             },
           },
           table: {
@@ -267,8 +409,16 @@ export async function POST(
             name: item.name,
             quantity: item.quantity,
             priceC: item.priceC,
+            modifiersPriceC: item.modifiersPriceC,
             totalC: item.totalC,
             notes: item.notes,
+            status: item.status,
+            modifiers: item.modifiers.map((modifier) => ({
+              id: modifier.id,
+              groupName: modifier.groupName,
+              name: modifier.name,
+              priceDeltaC: modifier.priceDeltaC,
+            })),
           })),
         },
       },
@@ -375,13 +525,41 @@ export async function GET(
                 name: true,
                 quantity: true,
                 priceC: true,
+                modifiersPriceC: true,
                 totalC: true,
                 notes: true,
+                status: true,
+                readyAt: true,
+                servedAt: true,
+                modifiers: {
+                  select: {
+                    id: true,
+                    groupName: true,
+                    name: true,
+                    priceDeltaC: true,
+                  },
+                },
               },
             },
             payments: {
               select: {
+                id: true,
                 status: true,
+                method: true,
+                amountC: true,
+                tipC: true,
+                createdAt: true,
+              },
+            },
+            discounts: {
+              select: {
+                id: true,
+                type: true,
+                valueBp: true,
+                amountC: true,
+                reason: true,
+                orderItemId: true,
+                createdAt: true,
               },
             },
           },
@@ -436,19 +614,52 @@ export async function GET(
 
     return NextResponse.json({
       orders: orders.map((order) => {
-        const isPaid = order.payments.some(
-          (payment) => payment.status === PaymentStatus.PAID
+        const discountsC = order.discounts.reduce(
+          (sum, d) => sum + d.amountC,
+          0
         );
+        const netDueC = Math.max(0, order.totalC - discountsC);
+        const paidC = order.payments
+          .filter((p) => p.status === PaymentStatus.PAID)
+          .reduce((sum, p) => sum + p.amountC, 0);
+        const tipsC = order.payments
+          .filter((p) => p.status === PaymentStatus.PAID)
+          .reduce((sum, p) => sum + p.tipC, 0);
+        const remainingC = Math.max(0, netDueC - paidC);
+        const isPaid = netDueC === 0 ? false : paidC >= netDueC;
 
         return {
           id: order.id,
           number: order.number,
           status: order.status,
           totalC: order.totalC,
+          discountsC,
+          netDueC,
+          paidC,
+          tipsC,
+          remainingC,
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
           notes: order.notes,
           isPaid,
+          discounts: order.discounts.map((d) => ({
+            id: d.id,
+            type: d.type,
+            valueBp: d.valueBp,
+            amountC: d.amountC,
+            reason: d.reason,
+            orderItemId: d.orderItemId,
+            createdAt: d.createdAt,
+          })),
+          payments: order.payments
+            .filter((p) => p.status === PaymentStatus.PAID)
+            .map((p) => ({
+              id: p.id,
+              method: p.method,
+              amountC: p.amountC,
+              tipC: p.tipC,
+              createdAt: p.createdAt,
+            })),
           table: order.table
             ? {
                 id: order.table.id,
@@ -460,8 +671,18 @@ export async function GET(
             name: item.name,
             quantity: item.quantity,
             priceC: item.priceC,
+            modifiersPriceC: item.modifiersPriceC,
             totalC: item.totalC,
             notes: item.notes,
+            status: item.status,
+            readyAt: item.readyAt,
+            servedAt: item.servedAt,
+            modifiers: item.modifiers.map((modifier) => ({
+              id: modifier.id,
+              groupName: modifier.groupName,
+              name: modifier.name,
+              priceDeltaC: modifier.priceDeltaC,
+            })),
           })),
         };
       }),

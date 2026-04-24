@@ -41,8 +41,17 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, price, categoryId, active, description, imageUrl, outOfStock } =
-      body;
+    const {
+      name,
+      price,
+      categoryId,
+      active,
+      description,
+      imageUrl,
+      outOfStock,
+      stationId,
+      prepMinutes,
+    } = body;
 
     // Verificar que el item existe y pertenece a la org
     const existingItem = await prisma.menuItem.findFirst({
@@ -100,6 +109,8 @@ export async function PUT(
       imageUrl?: string | null;
       active?: boolean;
       outOfStock?: boolean;
+      stationId?: string | null;
+      prepMinutes?: number | null;
     } = {};
 
     if (name !== undefined) {
@@ -123,6 +134,37 @@ export async function PUT(
     if (outOfStock !== undefined) {
       updateData.outOfStock = Boolean(outOfStock);
     }
+    if (stationId !== undefined) {
+      if (stationId === null || stationId === "") {
+        updateData.stationId = null;
+      } else {
+        const station = await prisma.kitchenStation.findFirst({
+          where: { id: stationId, orgId },
+          select: { id: true },
+        });
+        if (!station) {
+          return NextResponse.json(
+            { error: "La estación no existe en este restaurante" },
+            { status: 400 }
+          );
+        }
+        updateData.stationId = stationId;
+      }
+    }
+    if (prepMinutes !== undefined) {
+      if (prepMinutes === null || prepMinutes === "") {
+        updateData.prepMinutes = null;
+      } else {
+        const mins = Number(prepMinutes);
+        if (!Number.isInteger(mins) || mins < 0 || mins > 600) {
+          return NextResponse.json(
+            { error: "Tiempo de preparación inválido (0-600 minutos)" },
+            { status: 400 }
+          );
+        }
+        updateData.prepMinutes = mins;
+      }
+    }
 
     // Actualizar el item
     const updatedItem = await prisma.menuItem.update({
@@ -131,12 +173,8 @@ export async function PUT(
       },
       data: updateData,
       include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        category: { select: { id: true, name: true } },
+        station: { select: { id: true, name: true, color: true } },
       },
     });
 
@@ -150,6 +188,9 @@ export async function PUT(
         imageUrl: updatedItem.imageUrl,
         active: updatedItem.active,
         outOfStock: updatedItem.outOfStock,
+        prepMinutes: updatedItem.prepMinutes,
+        stationId: updatedItem.stationId,
+        station: updatedItem.station,
         category: updatedItem.category,
       },
     });

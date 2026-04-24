@@ -119,22 +119,22 @@ model VerificationToken {
 // =============== Usuarios y pertenencia (multi-tenant una-sede) ===============
 // Restaurant/tenant (una organization = un restaurante)
 model Organization {
-  id                      String         @id @default(cuid())
+  id                      String           @id @default(cuid())
   name                    String
-  slug                    String         @unique // Identificador legible para URL (único)
+  slug                    String           @unique // Identificador legible para URL (único)
   ownerId                 String
-  plan                    PlanTier       @default(FREE)
+  plan                    PlanTier         @default(FREE)
   planExpiresAt           DateTime? // Fecha de expiración cuando se otorga Premium manualmente
   planUpdatedAt           DateTime? // Última vez que se cambió de plan
   phone                   String?
   email                   String?
   address                 String?
-  description             String?        @db.Text
+  description             String?          @db.Text
   latitude                Float?
   longitude               Float?
   whatsappNumber          String?
-  whatsappOrderingEnabled Boolean        @default(false)
-  owner                   User           @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  whatsappOrderingEnabled Boolean          @default(false)
+  owner                   User             @relation("OrganizationOwner", fields: [ownerId], references: [id])
   branding                Branding?
   // Recursos del restaurante:
   tables                  Table[]
@@ -144,7 +144,8 @@ model Organization {
   memberships             Membership[]
   invitations             Invitation[]
   openingHours            OpeningHour[]
-  createdAt               DateTime       @default(now())
+  kitchenStations         KitchenStation[]
+  createdAt               DateTime         @default(now())
 }
 
 // Relación (usuario ↔ organization) con rol asignado
@@ -221,14 +222,37 @@ model MenuItem {
   imageUrl       String? // URL de la imagen del producto
   active         Boolean         @default(true) // Para ocultar temporalmente de la carta
   outOfStock     Boolean         @default(false) // 86'd: sin stock hoy (visible pero bloqueado al agregar)
+  stationId      String? // Estación de cocina asignada (bar, parrilla, postre…)
+  prepMinutes    Int? // Tiempo estimado de preparación en minutos
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   org            Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   category       MenuCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  station        KitchenStation? @relation(fields: [stationId], references: [id], onDelete: SetNull)
   orderItems     OrderItem[]
   modifierGroups ModifierGroup[]
 
   @@index([orgId, active]) // Búsqueda rápida por org/activo
+  @@index([stationId])
+}
+
+// Estación de cocina (bar, cocina caliente, parrilla, postre…)
+model KitchenStation {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  color     String? // Color hex para badges en UI
+  position  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  menuItems  MenuItem[]
+  orderItems OrderItem[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
 }
 
 // Grupo de modificadores de un plato (ej. "Término", "Extras", "Tamaño")
@@ -304,16 +328,22 @@ model OrderItem {
   totalC          Int // quantity * (priceC + modifiersPriceC)
   notes           String?
   status          OrderItemStatus @default(PENDING) // Estado individual en cocina
+  courseNumber    Int             @default(1) // Grupo de tiempo (1 = entradas, 2 = fuertes, 3 = postres...)
+  stationId       String? // Snapshot de la estación destino al momento del pedido
+  prepMinutes     Int? // Snapshot del tiempo estimado de preparación
+  firedAt         DateTime? // Cuándo se disparó (empezó el reloj de cocina)
   readyAt         DateTime? // Momento en que se marcó listo
   servedAt        DateTime? // Momento en que se marcó servido
 
   order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem  MenuItem            @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  station   KitchenStation?     @relation(fields: [stationId], references: [id], onDelete: SetNull)
   modifiers OrderItemModifier[]
   discounts Discount[]
 
   @@index([orderId])
   @@index([orderId, status])
+  @@index([stationId, status])
 }
 
 // Snapshot de modificadores elegidos en el momento de la orden

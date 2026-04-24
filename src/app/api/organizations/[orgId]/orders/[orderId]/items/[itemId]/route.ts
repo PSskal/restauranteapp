@@ -80,6 +80,7 @@ export async function PATCH(
       select: {
         id: true,
         status: true,
+        firedAt: true,
         order: { select: { id: true, status: true } },
       },
     });
@@ -92,8 +93,15 @@ export async function PATCH(
     }
 
     const now = new Date();
+    const shouldFireNow =
+      orderItem.firedAt === null &&
+      (status === OrderItemStatus.IN_PROGRESS ||
+        status === OrderItemStatus.READY ||
+        status === OrderItemStatus.SERVED);
+
     const patch = {
       status,
+      firedAt: shouldFireNow ? now : undefined,
       readyAt: status === OrderItemStatus.READY ? now : undefined,
       servedAt: status === OrderItemStatus.SERVED ? now : undefined,
     };

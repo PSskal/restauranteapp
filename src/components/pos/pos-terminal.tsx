@@ -94,6 +94,7 @@ type CartItem = {
   modifiers: CartItemModifier[];
   modifiersPriceC: number;
   notes?: string;
+  courseNumber: number;
 };
 
 type TableSummary = {
@@ -282,6 +283,7 @@ export function PosTerminal() {
       modifiers: CartItemModifier[],
       quantity: number,
       notes?: string,
+      courseNumber: number = 1,
     ) => {
       if (quantity < 1) return;
       const modifiersPriceC = modifiers.reduce(
@@ -298,6 +300,7 @@ export function PosTerminal() {
         const existingIndex = prev.findIndex(
           (entry) =>
             entry.menuItemId === item.id &&
+            entry.courseNumber === courseNumber &&
             entry.modifiers
               .map((m) => m.modifierId)
               .slice()
@@ -325,9 +328,21 @@ export function PosTerminal() {
             modifiers,
             modifiersPriceC,
             notes,
+            courseNumber,
           },
         ];
       });
+    },
+    [],
+  );
+
+  const setLineCourse = useCallback(
+    (lineId: string, courseNumber: number) => {
+      setCart((prev) =>
+        prev.map((entry) =>
+          entry.lineId === lineId ? { ...entry, courseNumber } : entry,
+        ),
+      );
     },
     [],
   );
@@ -400,6 +415,7 @@ export function PosTerminal() {
               menuItemId: entry.menuItemId,
               quantity: entry.quantity,
               notes: entry.notes || undefined,
+              courseNumber: entry.courseNumber,
               modifierIds: entry.modifiers.map((modifier) => modifier.modifierId),
             })),
             notes: orderNotes.trim() || undefined,
@@ -660,9 +676,15 @@ export function PosTerminal() {
         onOpenChange={(open) => {
           if (!open) setModifierDialogItem(null);
         }}
-        onConfirm={({ modifiers, quantity, notes }) => {
+        onConfirm={({ modifiers, quantity, notes, courseNumber }) => {
           if (!modifierDialogItem) return;
-          commitCartItem(modifierDialogItem, modifiers, quantity, notes);
+          commitCartItem(
+            modifierDialogItem,
+            modifiers,
+            quantity,
+            notes,
+            courseNumber,
+          );
           setModifierDialogItem(null);
         }}
       />
@@ -1001,6 +1023,22 @@ export function PosTerminal() {
                             {item.quantity}x
                           </span>
                           <div className="flex items-center gap-1">
+                            <select
+                              value={item.courseNumber}
+                              onChange={(e) =>
+                                setLineCourse(
+                                  item.lineId,
+                                  parseInt(e.target.value, 10),
+                                )
+                              }
+                              className="h-6 rounded border bg-white px-1 text-xs"
+                              title="Curso"
+                            >
+                              <option value={1}>1º</option>
+                              <option value={2}>2º</option>
+                              <option value={3}>3º</option>
+                              <option value={4}>4º</option>
+                            </select>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1201,6 +1239,22 @@ export function PosTerminal() {
                                 {item.quantity}x
                               </span>
                               <div className="flex items-center gap-1">
+                                <select
+                                  value={item.courseNumber}
+                                  onChange={(e) =>
+                                    setLineCourse(
+                                      item.lineId,
+                                      parseInt(e.target.value, 10),
+                                    )
+                                  }
+                                  className="h-6 rounded border bg-white px-1 text-xs"
+                                  title="Curso"
+                                >
+                                  <option value={1}>1º</option>
+                                  <option value={2}>2º</option>
+                                  <option value={3}>3º</option>
+                                  <option value={4}>4º</option>
+                                </select>
                                 <Button
                                   variant="ghost"
                                   size="icon"

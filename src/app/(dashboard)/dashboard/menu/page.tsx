@@ -35,10 +35,18 @@ interface MenuItem {
   outOfStock?: boolean;
   description?: string;
   imageUrl?: string;
+  stationId?: string | null;
+  prepMinutes?: number | null;
   category: {
     id: string;
     name: string;
   };
+}
+
+interface Station {
+  id: string;
+  name: string;
+  color?: string | null;
 }
 
 export default function MenuPage() {
@@ -46,6 +54,7 @@ export default function MenuPage() {
   const { currentOrg, isLoading: orgLoading } = useOrganization();
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
 
@@ -122,10 +131,26 @@ export default function MenuPage() {
     }
   }, [currentOrg]);
 
+  const fetchStations = useCallback(async () => {
+    if (!currentOrg) return;
+    try {
+      const response = await fetch(
+        `/api/organizations/${currentOrg.id}/kitchen-stations`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setStations(data.stations || []);
+      }
+    } catch (error) {
+      console.error("Error fetching stations:", error);
+    }
+  }, [currentOrg]);
+
   useEffect(() => {
     fetchCategories();
     fetchMenuItems();
-  }, [fetchCategories, fetchMenuItems]);
+    fetchStations();
+  }, [fetchCategories, fetchMenuItems, fetchStations]);
 
   useEffect(() => {
     if (
@@ -406,12 +431,13 @@ export default function MenuPage() {
             onCategoryChange={setSelectedCategoryId}
             onCreateMenuItem={() => setShowCreateMenuItem(true)}
             onEditMenuItem={(menuItem) => {
-              // Convert MenuItemData to MenuItem for compatibility
-              const convertedItem: MenuItem = {
-                ...menuItem,
-                imageUrl: menuItem.imageUrl || undefined,
-              };
-              handleEditMenuItem(convertedItem);
+              // Buscamos el item completo (con stationId/prepMinutes) desde el state
+              const full =
+                menuItems.find((item) => item.id === menuItem.id) ?? {
+                  ...menuItem,
+                  imageUrl: menuItem.imageUrl || undefined,
+                };
+              handleEditMenuItem(full as MenuItem);
             }}
             onToggleMenuItem={handleToggleItemActive}
             onToggleOutOfStock={handleToggleOutOfStock}
@@ -470,6 +496,7 @@ export default function MenuPage() {
         onSuccess={handleDataRefresh}
         organizationId={currentOrg.id}
         categories={categories}
+        stations={stations}
         menuItem={selectedMenuItem}
       />
 

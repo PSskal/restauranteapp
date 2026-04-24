@@ -52,6 +52,8 @@ const formSchema = z.object({
     .optional()
     .or(z.literal("")),
   active: z.boolean(),
+  stationId: z.string().optional(),
+  prepMinutes: z.string().optional(),
 });
 
 interface Category {
@@ -67,10 +69,18 @@ interface MenuItem {
   active: boolean;
   description?: string;
   imageUrl?: string;
+  stationId?: string | null;
+  prepMinutes?: number | null;
   category: {
     id: string;
     name: string;
   };
+}
+
+interface Station {
+  id: string;
+  name: string;
+  color?: string | null;
 }
 
 interface EditMenuItemModalProps {
@@ -79,6 +89,7 @@ interface EditMenuItemModalProps {
   onSuccess: () => void;
   organizationId: string;
   categories: Category[];
+  stations?: Station[];
   menuItem: MenuItem | null;
 }
 
@@ -88,6 +99,7 @@ export function EditMenuItemModal({
   onSuccess,
   organizationId,
   categories,
+  stations = [],
   menuItem,
 }: EditMenuItemModalProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -104,6 +116,8 @@ export function EditMenuItemModal({
       description: "",
       imageUrl: "",
       active: true,
+      stationId: "",
+      prepMinutes: "",
     },
   });
 
@@ -117,6 +131,11 @@ export function EditMenuItemModal({
         description: menuItem.description || "",
         imageUrl: menuItem.imageUrl || "",
         active: menuItem.active,
+        stationId: menuItem.stationId || "",
+        prepMinutes:
+          menuItem.prepMinutes !== null && menuItem.prepMinutes !== undefined
+            ? String(menuItem.prepMinutes)
+            : "",
       });
       setImagePreview(menuItem.imageUrl || null);
     }
@@ -197,6 +216,11 @@ export function EditMenuItemModal({
             description: values.description || undefined,
             imageUrl: values.imageUrl || undefined,
             active: values.active,
+            stationId: values.stationId ? values.stationId : null,
+            prepMinutes:
+              values.prepMinutes && values.prepMinutes.trim() !== ""
+                ? parseInt(values.prepMinutes, 10)
+                : null,
           }),
         }
       );
@@ -414,6 +438,61 @@ export function EditMenuItemModal({
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="stationId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estación de cocina</FormLabel>
+                    <Select
+                      onValueChange={(value) =>
+                        field.onChange(value === "__none__" ? "" : value)
+                      }
+                      value={field.value || "__none__"}
+                      disabled={isLoading}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin asignar" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin asignar</SelectItem>
+                        {stations.map((station) => (
+                          <SelectItem key={station.id} value={station.id}>
+                            {station.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="prepMinutes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tiempo prep. (min)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="600"
+                        placeholder="Opcional"
+                        {...field}
+                        disabled={isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

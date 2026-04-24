@@ -21,6 +21,12 @@ const itemSchema = z.object({
     .max(20, "Maximo 20 unidades por producto"),
   notes: z.string().trim().max(200, "Maximo 200 caracteres").optional(),
   modifierIds: z.array(z.string().min(1)).max(30).optional(),
+  courseNumber: z
+    .number()
+    .int()
+    .min(1)
+    .max(9, "El curso máximo es 9")
+    .optional(),
 });
 
 const createOrderSchema = z.object({
@@ -200,6 +206,9 @@ export async function POST(
       modifiersPriceC: number;
       totalC: number;
       notes: string | null;
+      courseNumber: number;
+      stationId: string | null;
+      prepMinutes: number | null;
       modifiers: Array<{
         modifierId: string;
         groupName: string;
@@ -307,6 +316,9 @@ export async function POST(
         modifiersPriceC,
         totalC,
         notes: item.notes?.trim() || null,
+        courseNumber: item.courseNumber ?? 1,
+        stationId: menuItem.stationId ?? null,
+        prepMinutes: menuItem.prepMinutes ?? null,
         modifiers: selectedModifiersSnapshot,
       });
     }
@@ -328,6 +340,7 @@ export async function POST(
 
       const nextOrderNumber = (lastOrder?.number ?? 0) + 1;
 
+      const now = new Date();
       return tx.order.create({
         data: {
           orgId,
@@ -346,6 +359,13 @@ export async function POST(
               modifiersPriceC: item.modifiersPriceC,
               totalC: item.totalC,
               notes: item.notes,
+              courseNumber: item.courseNumber,
+              stationId: item.stationId,
+              prepMinutes: item.prepMinutes,
+              // Al auto-aceptar, se dispara sólo el primer curso; el resto
+              // queda en PENDING esperando Fire.
+              firedAt:
+                autoAccept && item.courseNumber === 1 ? now : null,
               modifiers: {
                 create: item.modifiers.map((modifier) => ({
                   modifierId: modifier.modifierId,
@@ -368,6 +388,11 @@ export async function POST(
               totalC: true,
               notes: true,
               status: true,
+              courseNumber: true,
+              stationId: true,
+              prepMinutes: true,
+              firedAt: true,
+              station: { select: { id: true, name: true, color: true } },
               modifiers: {
                 select: {
                   id: true,
@@ -413,6 +438,11 @@ export async function POST(
             totalC: item.totalC,
             notes: item.notes,
             status: item.status,
+            courseNumber: item.courseNumber,
+            stationId: item.stationId,
+            prepMinutes: item.prepMinutes,
+            firedAt: item.firedAt,
+            station: item.station,
             modifiers: item.modifiers.map((modifier) => ({
               id: modifier.id,
               groupName: modifier.groupName,
@@ -529,8 +559,13 @@ export async function GET(
                 totalC: true,
                 notes: true,
                 status: true,
+                courseNumber: true,
+                stationId: true,
+                prepMinutes: true,
+                firedAt: true,
                 readyAt: true,
                 servedAt: true,
+                station: { select: { id: true, name: true, color: true } },
                 modifiers: {
                   select: {
                     id: true,
@@ -675,8 +710,13 @@ export async function GET(
             totalC: item.totalC,
             notes: item.notes,
             status: item.status,
+            courseNumber: item.courseNumber,
+            stationId: item.stationId,
+            prepMinutes: item.prepMinutes,
+            firedAt: item.firedAt,
             readyAt: item.readyAt,
             servedAt: item.servedAt,
+            station: item.station,
             modifiers: item.modifiers.map((modifier) => ({
               id: modifier.id,
               groupName: modifier.groupName,

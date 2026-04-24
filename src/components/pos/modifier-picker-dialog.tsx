@@ -56,6 +56,7 @@ type Props = {
     modifiers: ModifierSelection[];
     quantity: number;
     notes?: string;
+    courseNumber: number;
   }) => void;
 };
 
@@ -70,12 +71,14 @@ export function ModifierPickerDialog({
   >({});
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
+  const [courseNumber, setCourseNumber] = useState<number>(1);
 
   useEffect(() => {
     if (open && item) {
       setSelectedByGroup({});
       setQuantity(1);
       setNotes("");
+      setCourseNumber(1);
     }
   }, [item, open]);
 
@@ -144,6 +147,7 @@ export function ModifierPickerDialog({
       modifiers,
       quantity,
       notes: notes.trim() || undefined,
+      courseNumber,
     });
     onOpenChange(false);
   };
@@ -259,6 +263,26 @@ export function ModifierPickerDialog({
               >
                 <Plus className="h-3 w-3" />
               </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <Label className="text-sm font-semibold">
+              Curso (orden de salida)
+            </Label>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4].map((course) => (
+                <Button
+                  key={course}
+                  type="button"
+                  variant={courseNumber === course ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 w-10 text-xs"
+                  onClick={() => setCourseNumber(course)}
+                >
+                  {course}º
+                </Button>
+              ))}
             </div>
           </div>
 

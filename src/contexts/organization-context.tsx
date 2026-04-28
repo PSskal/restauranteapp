@@ -24,6 +24,9 @@ interface Organization {
   createdAt: Date;
   whatsappNumber: string | null;
   whatsappOrderingEnabled: boolean;
+  onlineOrderingEnabled?: boolean;
+  pickupEnabled?: boolean;
+  deliveryEnabled?: boolean;
   phone?: string | null;
   email?: string | null;
   address?: string | null;

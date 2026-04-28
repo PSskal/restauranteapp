@@ -75,10 +75,16 @@ type KitchenOrderItem = {
   modifiers: KitchenOrderItemModifier[];
 };
 
+type OrderKind = "DINE_IN" | "PICKUP" | "DELIVERY";
+
 type KitchenOrder = {
   id: string;
   number: number;
   status: OrderStatus;
+  kind?: OrderKind;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
   createdAt: string;
   updatedAt: string;
   notes: string | null;
@@ -698,10 +704,32 @@ function KitchenOrderCard({
     <div className="space-y-3 rounded-lg border bg-card p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Pedido #{order.number}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold">Pedido #{order.number}</p>
+            {order.kind === "PICKUP" ? (
+              <Badge
+                variant="outline"
+                className="border-purple-200 bg-purple-50 text-[10px] text-purple-700"
+              >
+                Recoger
+              </Badge>
+            ) : null}
+            {order.kind === "DELIVERY" ? (
+              <Badge
+                variant="outline"
+                className="border-purple-200 bg-purple-50 text-[10px] text-purple-700"
+              >
+                Delivery
+              </Badge>
+            ) : null}
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>
-              {order.table ? `Mesa ${order.table.number}` : "Para llevar"}
+              {order.table
+                ? `Mesa ${order.table.number}`
+                : order.customerName
+                  ? order.customerName
+                  : "Para llevar"}
             </span>
             <span>•</span>
             <span>Creado {formatTime(order.createdAt)}</span>

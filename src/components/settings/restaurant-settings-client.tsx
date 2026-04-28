@@ -69,6 +69,9 @@ export function RestaurantSettingsClient() {
     longitude: currentOrg?.longitude ?? null,
     whatsappNumber: currentOrg?.whatsappNumber || "",
     whatsappOrderingEnabled: currentOrg?.whatsappOrderingEnabled || false,
+    onlineOrderingEnabled: currentOrg?.onlineOrderingEnabled || false,
+    pickupEnabled: currentOrg?.pickupEnabled || false,
+    deliveryEnabled: currentOrg?.deliveryEnabled || false,
   });
   const mapOpeningHoursFromApi = (data?: ApiOpeningHour[]) => {
     if (!data?.length) {
@@ -122,6 +125,10 @@ export function RestaurantSettingsClient() {
           whatsappNumber: data.organization.whatsappNumber ?? "",
           whatsappOrderingEnabled:
             data.organization.whatsappOrderingEnabled ?? false,
+          onlineOrderingEnabled:
+            data.organization.onlineOrderingEnabled ?? false,
+          pickupEnabled: data.organization.pickupEnabled ?? false,
+          deliveryEnabled: data.organization.deliveryEnabled ?? false,
         });
         setOpeningHours(mapOpeningHoursFromApi(data.organization.openingHours));
       } catch (error) {
@@ -256,6 +263,9 @@ export function RestaurantSettingsClient() {
         longitude: formData.longitude,
         whatsappNumber: formData.whatsappNumber,
         whatsappOrderingEnabled: formData.whatsappOrderingEnabled,
+        onlineOrderingEnabled: formData.onlineOrderingEnabled,
+        pickupEnabled: formData.pickupEnabled,
+        deliveryEnabled: formData.deliveryEnabled,
         openingHours: openingHours.map((hour) => ({
           dayOfWeek: hour.dayOfWeek,
           isOpen: hour.isOpen,
@@ -301,6 +311,10 @@ export function RestaurantSettingsClient() {
         whatsappNumber: data.organization.whatsappNumber ?? "",
         whatsappOrderingEnabled:
           data.organization.whatsappOrderingEnabled ?? false,
+        onlineOrderingEnabled:
+          data.organization.onlineOrderingEnabled ?? false,
+        pickupEnabled: data.organization.pickupEnabled ?? false,
+        deliveryEnabled: data.organization.deliveryEnabled ?? false,
       });
       setOpeningHours(mapOpeningHoursFromApi(data.organization.openingHours));
       toast.success("Información del restaurante actualizada");
@@ -441,6 +455,73 @@ export function RestaurantSettingsClient() {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">
+                  Pedidos online (carrito web)
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Activa una página pública en{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+                    /{currentOrg?.slug ?? "tu-slug"}/order
+                  </code>{" "}
+                  donde tus clientes pueden pedir directo a la cocina.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="flex items-center justify-between rounded-md border bg-background p-3">
+                  <span className="text-sm">Aceptar pedidos online</span>
+                  <Switch
+                    checked={formData.onlineOrderingEnabled}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        onlineOrderingEnabled: checked,
+                      }))
+                    }
+                    disabled={currentOrg?.plan !== "PREMIUM"}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-md border bg-background p-3">
+                  <span className="text-sm">Pickup (recoger)</span>
+                  <Switch
+                    checked={formData.pickupEnabled}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        pickupEnabled: checked,
+                      }))
+                    }
+                    disabled={
+                      currentOrg?.plan !== "PREMIUM" ||
+                      !formData.onlineOrderingEnabled
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-md border bg-background p-3">
+                  <span className="text-sm">Delivery</span>
+                  <Switch
+                    checked={formData.deliveryEnabled}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        deliveryEnabled: checked,
+                      }))
+                    }
+                    disabled={
+                      currentOrg?.plan !== "PREMIUM" ||
+                      !formData.onlineOrderingEnabled
+                    }
+                  />
+                </div>
+              </div>
+              {currentOrg?.plan !== "PREMIUM" && (
+                <p className="text-xs text-amber-600">
+                  Requiere plan Premium
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

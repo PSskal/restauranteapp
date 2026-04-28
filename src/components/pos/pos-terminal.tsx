@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -106,6 +107,8 @@ type TableSummary = {
 export function PosTerminal() {
   const { currentOrg, isLoading: isOrgLoading } = useOrganization();
   const currentOrgId = currentOrg?.id ?? null;
+  const searchParams = useSearchParams();
+  const presetTableId = searchParams?.get("tableId") ?? null;
 
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -214,9 +217,19 @@ export function PosTerminal() {
         (table) => table.isEnabled,
       );
       setTables(enabledTables);
-      setSelectedTableId((prev) =>
-        prev && enabledTables.some((table) => table.id === prev) ? prev : null,
-      );
+      setSelectedTableId((prev) => {
+        // Preferimos el tableId que viene por query string (?tableId=...)
+        // si la mesa está habilitada
+        if (
+          presetTableId &&
+          enabledTables.some((table) => table.id === presetTableId)
+        ) {
+          return presetTableId;
+        }
+        return prev && enabledTables.some((table) => table.id === prev)
+          ? prev
+          : null;
+      });
     } catch (error) {
       const message =
         error instanceof Error
@@ -228,7 +241,7 @@ export function PosTerminal() {
     } finally {
       setTablesLoading(false);
     }
-  }, [currentOrgId]);
+  }, [currentOrgId, presetTableId]);
 
   useEffect(() => {
     if (!currentOrgId) {

@@ -39,7 +39,7 @@ const restaurantNavigation = [
     isActive: true,
   },
   {
-    title: "Mesas",
+    title: "Sala",
     url: "/dashboard/mesas",
     icon: QrCode,
   },

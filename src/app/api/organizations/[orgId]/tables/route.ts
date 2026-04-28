@@ -41,14 +41,13 @@ export async function GET(
       );
     }
 
-    // Obtener las mesas de la organización
+    // Obtener las mesas de la organización (con zona asociada)
     const tables = await prisma.table.findMany({
-      where: {
-        orgId: orgId,
+      where: { orgId },
+      include: {
+        zone: { select: { id: true, name: true, color: true } },
       },
-      orderBy: {
-        number: "asc",
-      },
+      orderBy: { number: "asc" },
     });
 
     return NextResponse.json({
@@ -200,14 +199,25 @@ export async function PATCH(
       return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
     }
 
-    const { tableId, isEnabled } = body as {
+    const { tableId, isEnabled, zoneId } = body as {
       tableId?: string;
       isEnabled?: unknown;
+      zoneId?: unknown;
     };
 
-    if (!tableId || typeof isEnabled !== "boolean") {
+    if (!tableId) {
       return NextResponse.json(
-        { error: "Datos inválidos para actualizar la mesa" },
+        { error: "tableId requerido" },
+        { status: 400 }
+      );
+    }
+
+    const isEnabledProvided = typeof isEnabled === "boolean";
+    const zoneIdProvided = zoneId !== undefined;
+
+    if (!isEnabledProvided && !zoneIdProvided) {
+      return NextResponse.json(
+        { error: "No hay cambios que aplicar" },
         { status: 400 }
       );
     }
@@ -247,9 +257,34 @@ export async function PATCH(
       );
     }
 
+    const data: { isEnabled?: boolean; zoneId?: string | null } = {};
+    if (isEnabledProvided) data.isEnabled = isEnabled as boolean;
+    if (zoneIdProvided) {
+      if (zoneId === null || zoneId === "") {
+        data.zoneId = null;
+      } else if (typeof zoneId === "string") {
+        const zone = await prisma.zone.findFirst({
+          where: { id: zoneId, orgId },
+          select: { id: true },
+        });
+        if (!zone) {
+          return NextResponse.json(
+            { error: "La zona no existe en este restaurante" },
+            { status: 400 }
+          );
+        }
+        data.zoneId = zoneId;
+      } else {
+        return NextResponse.json(
+          { error: "zoneId inválido" },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await prisma.table.update({
       where: { id: tableId },
-      data: { isEnabled },
+      data,
     });
 
     return NextResponse.json({

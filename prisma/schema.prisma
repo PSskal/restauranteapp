@@ -156,6 +156,7 @@ model Organization {
   invitations             Invitation[]
   openingHours            OpeningHour[]
   kitchenStations         KitchenStation[]
+  zones                   Zone[]
   createdAt               DateTime         @default(now())
 }
 
@@ -185,10 +186,28 @@ model Invitation {
 }
 
 // =============== Mesas (QR) ===============
+// Zona del local (Terraza, Salón principal, Barra, VIP…)
+model Zone {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  color     String? // Color hex para badges/tabs en UI
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  tables Table[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
 // Mesa del salón; cada una tiene un token único para el link público (QR)
 model Table {
   id        String  @id @default(cuid())
   orgId     String
+  zoneId    String? // Zona a la que pertenece (null = sin asignar)
   number    Int
   qrToken   String  @default(uuid()) // Token para URL pública del QR
   isEnabled Boolean @default(false)
@@ -202,9 +221,11 @@ model Table {
   rotation  Float? // Rotación en grados (0-360)
 
   org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  zone   Zone?        @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   orders Order[]
 
   @@unique([orgId, number]) // Número de mesa único por restaurante
+  @@index([zoneId])
 }
 
 // =============== Menú básico ===============

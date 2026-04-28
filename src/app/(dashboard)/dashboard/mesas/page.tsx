@@ -30,12 +30,21 @@ import {
   Download,
   List,
   LayoutGrid,
+  Users,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CreateTableModal } from "@/components/tables/create-table-modal";
 import { QRCodeCanvas } from "@/components/qr/qr-code-canvas";
 import { FloorPlanEditor } from "@/components/mesas/floor-plan-editor";
+import { FloorView } from "@/components/mesas/floor-view";
+import { ZonesManager } from "@/components/mesas/zones-manager";
 import { toast } from "sonner";
+
+interface Zone {
+  id: string;
+  name: string;
+  color: string | null;
+}
 
 interface Table {
   id: string;
@@ -43,12 +52,15 @@ interface Table {
   qrToken: string;
   orgId: string;
   isEnabled: boolean;
+  zoneId?: string | null;
+  zone?: Zone | null;
 }
 
 export default function MesasPage() {
   const { status } = useSession();
   const { currentOrg, isLoading: orgLoading } = useOrganization();
   const [tables, setTables] = useState<Table[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTableForQR, setSelectedTableForQR] = useState<Table | null>(
@@ -78,10 +90,56 @@ export default function MesasPage() {
     }
   }, [currentOrg]);
 
-  // Cargar mesas cuando cambie la organización actual
+  const fetchZones = useCallback(async () => {
+    if (!currentOrg) return;
+    try {
+      const response = await fetch(
+        `/api/organizations/${currentOrg.id}/zones`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setZones(data.zones || []);
+      }
+    } catch (error) {
+      console.error("Error fetching zones:", error);
+    }
+  }, [currentOrg]);
+
+  const handleAssignZone = useCallback(
+    async (tableId: string, zoneId: string | null) => {
+      if (!currentOrg) return;
+      setUpdatingTableId(tableId);
+      try {
+        const response = await fetch(
+          `/api/organizations/${currentOrg.id}/tables`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tableId, zoneId }),
+          }
+        );
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error || "No se pudo actualizar la zona");
+        }
+        await fetchTables();
+        toast.success("Zona actualizada");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Error actualizando zona"
+        );
+      } finally {
+        setUpdatingTableId(null);
+      }
+    },
+    [currentOrg, fetchTables]
+  );
+
+  // Cargar mesas y zonas cuando cambie la organización actual
   useEffect(() => {
     fetchTables();
-  }, [fetchTables]);
+    fetchZones();
+  }, [fetchTables, fetchZones]);
 
   // Función para ver QR de una mesa
   const handleViewQR = async (table: Table) => {
@@ -258,7 +316,7 @@ export default function MesasPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Gestión de Mesas</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Sala</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Restaurante: <span className="font-medium">{currentOrg.name}</span>
           </p>
@@ -299,19 +357,32 @@ export default function MesasPage() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue="list" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+        <Tabs defaultValue="floor" className="w-full">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3 mb-6">
+            <TabsTrigger value="floor" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Sala (en vivo)
+            </TabsTrigger>
             <TabsTrigger value="list" className="flex items-center gap-2">
               <List className="h-4 w-4" />
-              Vista de Lista
+              Lista
             </TabsTrigger>
             <TabsTrigger value="floor-plan" className="flex items-center gap-2">
               <LayoutGrid className="h-4 w-4" />
-              Plano del Local
+              Editor de plano
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="list" className="space-y-0">
+          <TabsContent value="floor" className="space-y-4">
+            <FloorView orgId={currentOrg.id} orgSlug={currentOrg.slug} />
+          </TabsContent>
+
+
+          <TabsContent value="list" className="space-y-6">
+            <ZonesManager
+              orgId={currentOrg.id}
+              onZonesChanged={fetchTables}
+            />
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {tables.map((table: Table) => (
                 <Card
@@ -319,20 +390,34 @@ export default function MesasPage() {
                   className="hover:shadow-md transition-shadow"
                 >
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <CardTitle className="text-lg">
                         Mesa {table.number}
                       </CardTitle>
-                      <Badge
-                        variant={table.isEnabled ? "default" : "outline"}
-                        className={`text-xs ${
-                          table.isEnabled
-                            ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {table.isEnabled ? "Habilitada" : "Deshabilitada"}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        {table.zone ? (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px]"
+                            style={{
+                              borderColor: table.zone.color ?? undefined,
+                              color: table.zone.color ?? undefined,
+                            }}
+                          >
+                            {table.zone.name}
+                          </Badge>
+                        ) : null}
+                        <Badge
+                          variant={table.isEnabled ? "default" : "outline"}
+                          className={`text-xs ${
+                            table.isEnabled
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {table.isEnabled ? "Habilitada" : "Deshabilitada"}
+                        </Badge>
+                      </div>
                     </div>
                     <CardDescription className="text-xs">
                       Token: {table.qrToken.slice(0, 8)}...
@@ -362,6 +447,36 @@ export default function MesasPage() {
                         disabled={updatingTableId === table.id}
                       />
                     </div>
+
+                    {zones.length > 0 ? (
+                      <div className="rounded-md border px-3 py-2">
+                        <label
+                          htmlFor={`zone-${table.id}`}
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          Zona
+                        </label>
+                        <select
+                          id={`zone-${table.id}`}
+                          className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                          value={table.zoneId ?? ""}
+                          onChange={(e) =>
+                            handleAssignZone(
+                              table.id,
+                              e.target.value || null
+                            )
+                          }
+                          disabled={updatingTableId === table.id}
+                        >
+                          <option value="">Sin zona</option>
+                          {zones.map((zone) => (
+                            <option key={zone.id} value={zone.id}>
+                              {zone.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
 
                     {updatingTableId === table.id ? (
                       <p className="flex items-center gap-2 text-xs text-muted-foreground">

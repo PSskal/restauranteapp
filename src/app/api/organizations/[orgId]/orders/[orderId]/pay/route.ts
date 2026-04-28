@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { checkRate, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { computeOrderTotals } from "@/lib/order-totals";
 
 const paySchema = z.object({
   method: z.nativeEnum(PaymentMethod).optional(),
@@ -32,6 +34,14 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // 60 pagos por minuto por org+usuario es suficiente y bloquea bucles raros
+    const rl = await checkRate(
+      "orders.pay",
+      `${orgId}:${getClientIp(request)}:${session.user.id}`,
+      { max: 60, windowMs: 60_000 }
+    );
+    if (!rl.ok) return rateLimitResponse(rl);
 
     const payload = await request.json().catch(() => ({}));
     const parsed = paySchema.safeParse(payload);
@@ -156,19 +166,11 @@ export async function POST(
       );
     }
 
-    const newPaidC = updatedOrder.payments
-      .filter((p) => p.status === PaymentStatus.PAID)
-      .reduce((sum, p) => sum + p.amountC, 0);
-    const newTipsC = updatedOrder.payments
-      .filter((p) => p.status === PaymentStatus.PAID)
-      .reduce((sum, p) => sum + p.tipC, 0);
-    const newDiscountsC = updatedOrder.discounts.reduce(
-      (sum, d) => sum + d.amountC,
-      0
-    );
-    const newNetDueC = Math.max(0, updatedOrder.totalC - newDiscountsC);
-    const isPaid = newPaidC >= newNetDueC && newNetDueC > 0;
-    const remainingC = Math.max(0, newNetDueC - newPaidC);
+    const totals = computeOrderTotals({
+      totalC: updatedOrder.totalC,
+      discounts: updatedOrder.discounts,
+      payments: updatedOrder.payments,
+    });
 
     return NextResponse.json({
       order: {
@@ -176,12 +178,12 @@ export async function POST(
         number: updatedOrder.number,
         status: updatedOrder.status,
         totalC: updatedOrder.totalC,
-        discountsC: newDiscountsC,
-        netDueC: newNetDueC,
-        paidC: newPaidC,
-        tipsC: newTipsC,
-        remainingC,
-        isPaid,
+        discountsC: totals.discountsC,
+        netDueC: totals.netDueC,
+        paidC: totals.paidC,
+        tipsC: totals.tipsC,
+        remainingC: totals.remainingC,
+        isPaid: totals.isPaid,
         createdAt: updatedOrder.createdAt,
         updatedAt: updatedOrder.updatedAt,
         notes: updatedOrder.notes,

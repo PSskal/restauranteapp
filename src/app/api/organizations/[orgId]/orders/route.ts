@@ -4,6 +4,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkNumericLimit } from "@/lib/subscription";
+import { checkRate, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { computeOrderTotals } from "@/lib/order-totals";
 
 const ALLOWED_POS_ROLES: Role[] = [
   Role.OWNER,
@@ -65,6 +67,14 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // 30 pedidos por minuto por org+usuario+IP es suficiente para uso humano normal
+    const rl = await checkRate(
+      "orders.create",
+      `${orgId}:${getClientIp(request)}:${session.user.id}`,
+      { max: 30, windowMs: 60_000 }
+    );
+    if (!rl.ok) return rateLimitResponse(rl);
 
     const [membership, organization] = await Promise.all([
       prisma.membership.findFirst({
@@ -649,19 +659,13 @@ export async function GET(
 
     return NextResponse.json({
       orders: orders.map((order) => {
-        const discountsC = order.discounts.reduce(
-          (sum, d) => sum + d.amountC,
-          0
-        );
-        const netDueC = Math.max(0, order.totalC - discountsC);
-        const paidC = order.payments
-          .filter((p) => p.status === PaymentStatus.PAID)
-          .reduce((sum, p) => sum + p.amountC, 0);
-        const tipsC = order.payments
-          .filter((p) => p.status === PaymentStatus.PAID)
-          .reduce((sum, p) => sum + p.tipC, 0);
-        const remainingC = Math.max(0, netDueC - paidC);
-        const isPaid = netDueC === 0 ? false : paidC >= netDueC;
+        const totals = computeOrderTotals({
+          totalC: order.totalC,
+          discounts: order.discounts,
+          payments: order.payments,
+        });
+        const { discountsC, netDueC, paidC, tipsC, remainingC, isPaid } =
+          totals;
 
         return {
           id: order.id,

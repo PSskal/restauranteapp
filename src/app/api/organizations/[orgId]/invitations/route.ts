@@ -7,6 +7,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkNumericLimit } from "@/lib/subscription";
 import { assertResendClient, getResendFromAddress } from "@/lib/resend";
+import { checkRate, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { log } from "@/lib/logger";
 
 const invitationSchema = z.object({
   email: z.string().email(),
@@ -36,6 +38,14 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // Anti-abuso: 10 invitaciones por hora por org/usuario
+    const rl = await checkRate(
+      "invitations.create",
+      `${orgId}:${getClientIp(request)}:${session.user.id}`,
+      { max: 10, windowMs: 60 * 60 * 1000 }
+    );
+    if (!rl.ok) return rateLimitResponse(rl);
 
     const json = await request.json().catch(() => null);
     const parsed = invitationSchema.safeParse(json);
@@ -176,10 +186,9 @@ export async function POST(
       const inviteUrl = buildInviteLink(token);
       const roleName = role.charAt(0) + role.slice(1).toLowerCase();
 
-      console.log("Enviando invitación con Resend:", {
-        from,
-        to: normalizedEmail,
-        subject: `Invitación a ${organization.name}`,
+      log.info("invitation.send", {
+        orgId,
+        invitationId: invitation.id,
       });
 
       const result = await resend.emails.send({
@@ -212,17 +221,17 @@ El enlace expira el ${expiresAt.toLocaleDateString("es-PE", { dateStyle: "long" 
 Si no esperabas esta invitación, puedes ignorar este correo.`,
       });
 
-      console.log("Resend result:", result);
-
       if (result.error) {
-        console.error("Resend API error details:", result.error);
-        throw new Error(
-          `Resend API error: ${result.error.message || JSON.stringify(result.error)}`
-        );
+        log.error("invitation.send.failed", result.error, {
+          invitationId: invitation.id,
+        });
+        throw new Error("Resend API error");
       }
     } catch (emailError) {
       await prisma.invitation.delete({ where: { id: invitation.id } });
-      console.error("Error enviando invitacion por correo:", emailError);
+      log.error("invitation.send.exception", emailError, {
+        invitationId: invitation.id,
+      });
       return NextResponse.json(
         {
           error:
@@ -244,7 +253,7 @@ Si no esperabas esta invitación, puedes ignorar este correo.`,
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating invitation:", error);
+    log.error("invitation.create.exception", error);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

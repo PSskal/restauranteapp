@@ -15,10 +15,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/login",
     error: "/login",
   },
-  debug: false, // Desactivar debug temporalmente
+  debug: false,
   trustHost: true,
   session: {
-    strategy: "jwt", // Usar JWT en lugar de base de datos temporalmente
+    strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60, // 7 días
+    updateAge: 24 * 60 * 60, // refrescar cada 24h
+  },
+  jwt: {
+    maxAge: 7 * 24 * 60 * 60, // 7 días
   },
   callbacks: {
     async signIn({ user }) {
@@ -39,11 +44,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               image: user.image || null,
             },
           });
-          console.log("User upserted in database:", user.email);
         }
         return true;
       } catch (error) {
-        console.error("Error in signIn callback:", error);
+        console.error("Error in signIn callback");
+        void error;
         return true; // Continuar con el login aunque falle la creación del usuario
       }
     },
@@ -96,7 +101,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.isOwner = isOwner;
           }
         } catch (error) {
-          console.error("Error loading user role in JWT:", error);
+          console.error("Error loading user role in JWT");
+          void error;
         }
       }
 

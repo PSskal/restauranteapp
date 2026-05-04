@@ -16,7 +16,7 @@ const routeTitles: Record<string, string> = {
   "/dashboard/menu": "Menú",
   "/dashboard/pedidos": "Pedidos",
   "/dashboard/cocina": "Cocina",
-  "/dashboard/mesas": "Mesas",
+  "/dashboard/mesas": "Sala",
   "/dashboard/configuracion": "Configuración",
   "/dashboard/analytics": "Analíticas",
 };

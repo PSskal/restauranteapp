@@ -58,6 +58,9 @@ export async function GET(
             name: true,
           },
         },
+        station: {
+          select: { id: true, name: true, color: true },
+        },
         modifierGroups: {
           orderBy: [{ position: "asc" }, { createdAt: "asc" }],
           include: {
@@ -81,6 +84,9 @@ export async function GET(
         imageUrl: item.imageUrl,
         active: item.active,
         outOfStock: item.outOfStock,
+        prepMinutes: item.prepMinutes,
+        stationId: item.stationId,
+        station: item.station,
         category: item.category,
         modifierGroups: item.modifierGroups.map((group) => ({
           id: group.id,

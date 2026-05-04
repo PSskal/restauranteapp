@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -94,6 +95,7 @@ type CartItem = {
   modifiers: CartItemModifier[];
   modifiersPriceC: number;
   notes?: string;
+  courseNumber: number;
 };
 
 type TableSummary = {
@@ -105,6 +107,8 @@ type TableSummary = {
 export function PosTerminal() {
   const { currentOrg, isLoading: isOrgLoading } = useOrganization();
   const currentOrgId = currentOrg?.id ?? null;
+  const searchParams = useSearchParams();
+  const presetTableId = searchParams?.get("tableId") ?? null;
 
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -213,9 +217,19 @@ export function PosTerminal() {
         (table) => table.isEnabled,
       );
       setTables(enabledTables);
-      setSelectedTableId((prev) =>
-        prev && enabledTables.some((table) => table.id === prev) ? prev : null,
-      );
+      setSelectedTableId((prev) => {
+        // Preferimos el tableId que viene por query string (?tableId=...)
+        // si la mesa está habilitada
+        if (
+          presetTableId &&
+          enabledTables.some((table) => table.id === presetTableId)
+        ) {
+          return presetTableId;
+        }
+        return prev && enabledTables.some((table) => table.id === prev)
+          ? prev
+          : null;
+      });
     } catch (error) {
       const message =
         error instanceof Error
@@ -227,7 +241,7 @@ export function PosTerminal() {
     } finally {
       setTablesLoading(false);
     }
-  }, [currentOrgId]);
+  }, [currentOrgId, presetTableId]);
 
   useEffect(() => {
     if (!currentOrgId) {
@@ -282,6 +296,7 @@ export function PosTerminal() {
       modifiers: CartItemModifier[],
       quantity: number,
       notes?: string,
+      courseNumber: number = 1,
     ) => {
       if (quantity < 1) return;
       const modifiersPriceC = modifiers.reduce(
@@ -298,6 +313,7 @@ export function PosTerminal() {
         const existingIndex = prev.findIndex(
           (entry) =>
             entry.menuItemId === item.id &&
+            entry.courseNumber === courseNumber &&
             entry.modifiers
               .map((m) => m.modifierId)
               .slice()
@@ -325,9 +341,21 @@ export function PosTerminal() {
             modifiers,
             modifiersPriceC,
             notes,
+            courseNumber,
           },
         ];
       });
+    },
+    [],
+  );
+
+  const setLineCourse = useCallback(
+    (lineId: string, courseNumber: number) => {
+      setCart((prev) =>
+        prev.map((entry) =>
+          entry.lineId === lineId ? { ...entry, courseNumber } : entry,
+        ),
+      );
     },
     [],
   );
@@ -400,6 +428,7 @@ export function PosTerminal() {
               menuItemId: entry.menuItemId,
               quantity: entry.quantity,
               notes: entry.notes || undefined,
+              courseNumber: entry.courseNumber,
               modifierIds: entry.modifiers.map((modifier) => modifier.modifierId),
             })),
             notes: orderNotes.trim() || undefined,
@@ -660,9 +689,15 @@ export function PosTerminal() {
         onOpenChange={(open) => {
           if (!open) setModifierDialogItem(null);
         }}
-        onConfirm={({ modifiers, quantity, notes }) => {
+        onConfirm={({ modifiers, quantity, notes, courseNumber }) => {
           if (!modifierDialogItem) return;
-          commitCartItem(modifierDialogItem, modifiers, quantity, notes);
+          commitCartItem(
+            modifierDialogItem,
+            modifiers,
+            quantity,
+            notes,
+            courseNumber,
+          );
           setModifierDialogItem(null);
         }}
       />
@@ -1001,6 +1036,22 @@ export function PosTerminal() {
                             {item.quantity}x
                           </span>
                           <div className="flex items-center gap-1">
+                            <select
+                              value={item.courseNumber}
+                              onChange={(e) =>
+                                setLineCourse(
+                                  item.lineId,
+                                  parseInt(e.target.value, 10),
+                                )
+                              }
+                              className="h-6 rounded border bg-white px-1 text-xs"
+                              title="Curso"
+                            >
+                              <option value={1}>1º</option>
+                              <option value={2}>2º</option>
+                              <option value={3}>3º</option>
+                              <option value={4}>4º</option>
+                            </select>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1201,6 +1252,22 @@ export function PosTerminal() {
                                 {item.quantity}x
                               </span>
                               <div className="flex items-center gap-1">
+                                <select
+                                  value={item.courseNumber}
+                                  onChange={(e) =>
+                                    setLineCourse(
+                                      item.lineId,
+                                      parseInt(e.target.value, 10),
+                                    )
+                                  }
+                                  className="h-6 rounded border bg-white px-1 text-xs"
+                                  title="Curso"
+                                >
+                                  <option value={1}>1º</option>
+                                  <option value={2}>2º</option>
+                                  <option value={3}>3º</option>
+                                  <option value={4}>4º</option>
+                                </select>
                                 <Button
                                   variant="ghost"
                                   size="icon"

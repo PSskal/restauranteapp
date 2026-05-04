@@ -10,6 +10,7 @@ import {
   ChefHat,
   CircleCheck,
   Clock3,
+  Flame,
   Loader2,
   PlayCircle,
   RefreshCcw,
@@ -54,19 +55,36 @@ type KitchenOrderItemModifier = {
   priceDeltaC: number;
 };
 
+type KitchenStation = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
 type KitchenOrderItem = {
   id: string;
   name: string;
   quantity: number;
   notes: string | null;
   status: OrderItemStatus;
+  courseNumber: number;
+  stationId: string | null;
+  prepMinutes: number | null;
+  firedAt: string | null;
+  station: KitchenStation | null;
   modifiers: KitchenOrderItemModifier[];
 };
+
+type OrderKind = "DINE_IN" | "PICKUP" | "DELIVERY";
 
 type KitchenOrder = {
   id: string;
   number: number;
   status: OrderStatus;
+  kind?: OrderKind;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
   createdAt: string;
   updatedAt: string;
   notes: string | null;
@@ -175,12 +193,15 @@ function formatTime(dateIso: string) {
 export function KitchenDashboard() {
   const { currentOrg, isLoading: orgLoading } = useOrganization();
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
+  const [stations, setStations] = useState<KitchenStation[]>([]);
+  const [stationFilter, setStationFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [firingOrderId, setFiringOrderId] = useState<string | null>(null);
 
   const orgId = currentOrg?.id ?? null;
 
@@ -188,8 +209,21 @@ export function KitchenDashboard() {
     return (ACTIVE_STATUSES as readonly OrderStatus[]).includes(status);
   };
 
+  const filteredOrders = useMemo(() => {
+    if (stationFilter === "all") return orders;
+    return orders
+      .map((order) => ({
+        ...order,
+        items: order.items.filter((item) => {
+          if (stationFilter === "__unassigned__") return !item.stationId;
+          return item.stationId === stationFilter;
+        }),
+      }))
+      .filter((order) => order.items.length > 0);
+  }, [orders, stationFilter]);
+
   const groupedOrders = useMemo(() => {
-    return orders.reduce<Record<ColumnKey, KitchenOrder[]>>(
+    return filteredOrders.reduce<Record<ColumnKey, KitchenOrder[]>>(
       (acc, order) => {
         if (isActiveStatus(order.status)) {
           acc[order.status].push(order);
@@ -202,7 +236,7 @@ export function KitchenDashboard() {
         READY: [],
       }
     );
-  }, [orders]);
+  }, [filteredOrders]);
 
   const fetchOrders = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -254,6 +288,59 @@ export function KitchenDashboard() {
       }
     },
     [orgId]
+  );
+
+  const fetchStations = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/kitchen-stations`
+      );
+      if (response.ok) {
+        const data = (await response.json()) as { stations: KitchenStation[] };
+        setStations(data.stations.filter((station) => station));
+      }
+    } catch {
+      // Silencioso: el filtro "Todas" siempre funciona
+    }
+  }, [orgId]);
+
+  const handleFireCourse = useCallback(
+    async (orderId: string, courseNumber?: number) => {
+      if (!orgId) return;
+      setFiringOrderId(orderId);
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/orders/${orderId}/fire-course`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(courseNumber ? { courseNumber } : {}),
+          }
+        );
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(data?.error || "No se pudo disparar el curso");
+        }
+        const data = (await response.json()) as {
+          courseNumber: number;
+          firedCount: number;
+        };
+        await fetchOrders({ silent: true });
+        toast.success(
+          `Curso ${data.courseNumber} disparado (${data.firedCount} platos)`
+        );
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Error disparando curso"
+        );
+      } finally {
+        setFiringOrderId(null);
+      }
+    },
+    [fetchOrders, orgId]
   );
 
   const handleItemStatusChange = useCallback(
@@ -326,7 +413,8 @@ export function KitchenDashboard() {
 
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+    fetchStations();
+  }, [fetchOrders, fetchStations]);
 
   useEffect(() => {
     if (!autoRefresh || !orgId) {
@@ -421,6 +509,57 @@ export function KitchenDashboard() {
         ) : null}
       </div>
 
+      {stations.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Estación:
+          </span>
+          <button
+            type="button"
+            className={`rounded-full border px-3 py-1 text-xs transition ${
+              stationFilter === "all"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border hover:bg-muted"
+            }`}
+            onClick={() => setStationFilter("all")}
+          >
+            Todas
+          </button>
+          {stations.map((station) => {
+            const isActive = stationFilter === station.id;
+            return (
+              <button
+                key={station.id}
+                type="button"
+                className={`flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-muted"
+                }`}
+                onClick={() => setStationFilter(station.id)}
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: station.color ?? "#94A3B8" }}
+                />
+                {station.name}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className={`rounded-full border px-3 py-1 text-xs transition ${
+              stationFilter === "__unassigned__"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border hover:bg-muted"
+            }`}
+            onClick={() => setStationFilter("__unassigned__")}
+          >
+            Sin asignar
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         {ACTIVE_STATUSES.map((status) => (
           <KitchenStatusColumn
@@ -429,8 +568,10 @@ export function KitchenDashboard() {
             orders={groupedOrders[status as ColumnKey]}
             updatingItemId={updatingItemId}
             updatingOrderId={updatingOrderId}
+            firingOrderId={firingOrderId}
             onItemStatusChange={handleItemStatusChange}
             onOrderStatusChange={handleOrderStatusChange}
+            onFireCourse={handleFireCourse}
           />
         ))}
       </div>
@@ -443,6 +584,7 @@ type KitchenStatusColumnProps = {
   orders: KitchenOrder[];
   updatingItemId: string | null;
   updatingOrderId: string | null;
+  firingOrderId: string | null;
   onItemStatusChange: (
     orderId: string,
     itemId: string,
@@ -452,6 +594,10 @@ type KitchenStatusColumnProps = {
     orderId: string,
     status: OrderStatus
   ) => Promise<void> | void;
+  onFireCourse: (
+    orderId: string,
+    courseNumber?: number
+  ) => Promise<void> | void;
 };
 
 function KitchenStatusColumn({
@@ -459,8 +605,10 @@ function KitchenStatusColumn({
   orders,
   updatingItemId,
   updatingOrderId,
+  firingOrderId,
   onItemStatusChange,
   onOrderStatusChange,
+  onFireCourse,
 }: KitchenStatusColumnProps) {
   const config = columnConfig[status];
   const StatusIcon = config.icon;
@@ -495,8 +643,10 @@ function KitchenStatusColumn({
               order={order}
               updatingItemId={updatingItemId}
               updatingOrderId={updatingOrderId}
+              firingOrderId={firingOrderId}
               onItemStatusChange={onItemStatusChange}
               onOrderStatusChange={onOrderStatusChange}
+              onFireCourse={onFireCourse}
             />
           ))
         )}
@@ -509,6 +659,7 @@ type KitchenOrderCardProps = {
   order: KitchenOrder;
   updatingItemId: string | null;
   updatingOrderId: string | null;
+  firingOrderId: string | null;
   onItemStatusChange: (
     orderId: string,
     itemId: string,
@@ -518,14 +669,20 @@ type KitchenOrderCardProps = {
     orderId: string,
     status: OrderStatus
   ) => Promise<void> | void;
+  onFireCourse: (
+    orderId: string,
+    courseNumber?: number
+  ) => Promise<void> | void;
 };
 
 function KitchenOrderCard({
   order,
   updatingItemId,
   updatingOrderId,
+  firingOrderId,
   onItemStatusChange,
   onOrderStatusChange,
+  onFireCourse,
 }: KitchenOrderCardProps) {
   const nonCancelled = order.items.filter((item) => item.status !== "CANCELLED");
   const readyCount = nonCancelled.filter(
@@ -535,15 +692,44 @@ function KitchenOrderCard({
   const progressPct =
     totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
   const isOrderUpdating = updatingOrderId === order.id;
+  const isFiring = firingOrderId === order.id;
+
+  // Próximo curso pendiente de disparar
+  const nextPendingCourse = nonCancelled
+    .filter((item) => item.firedAt === null)
+    .map((item) => item.courseNumber)
+    .sort((a, b) => a - b)[0];
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Pedido #{order.number}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold">Pedido #{order.number}</p>
+            {order.kind === "PICKUP" ? (
+              <Badge
+                variant="outline"
+                className="border-purple-200 bg-purple-50 text-[10px] text-purple-700"
+              >
+                Recoger
+              </Badge>
+            ) : null}
+            {order.kind === "DELIVERY" ? (
+              <Badge
+                variant="outline"
+                className="border-purple-200 bg-purple-50 text-[10px] text-purple-700"
+              >
+                Delivery
+              </Badge>
+            ) : null}
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>
-              {order.table ? `Mesa ${order.table.number}` : "Para llevar"}
+              {order.table
+                ? `Mesa ${order.table.number}`
+                : order.customerName
+                  ? order.customerName
+                  : "Para llevar"}
             </span>
             <span>•</span>
             <span>Creado {formatTime(order.createdAt)}</span>
@@ -574,17 +760,48 @@ function KitchenOrderCard({
           const badge = itemStatusBadge[item.status];
           const isItemUpdating = updatingItemId === item.id;
           const disabled = isItemUpdating || isOrderUpdating;
+          const isWaitingFire = item.firedAt === null;
 
           return (
             <div
               key={item.id}
-              className="space-y-2 rounded-md bg-muted/40 p-2"
+              className={`space-y-2 rounded-md p-2 ${
+                isWaitingFire ? "bg-slate-100" : "bg-muted/40"
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">
                     {item.quantity}x {item.name}
                   </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <Badge
+                      variant="outline"
+                      className="border-slate-300 bg-white px-1.5 py-0 text-[10px]"
+                    >
+                      {item.courseNumber}º curso
+                    </Badge>
+                    {item.station ? (
+                      <Badge
+                        variant="outline"
+                        className="border px-1.5 py-0 text-[10px]"
+                        style={{
+                          borderColor: item.station.color ?? "#94A3B8",
+                          color: item.station.color ?? "#475569",
+                        }}
+                      >
+                        {item.station.name}
+                      </Badge>
+                    ) : null}
+                    {item.status === "IN_PROGRESS" &&
+                    item.firedAt &&
+                    item.prepMinutes ? (
+                      <PrepCountdown
+                        firedAt={item.firedAt}
+                        prepMinutes={item.prepMinutes}
+                      />
+                    ) : null}
+                  </div>
                   {item.modifiers.length > 0 ? (
                     <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                       {item.modifiers.map((modifier) => (
@@ -604,7 +821,7 @@ function KitchenOrderCard({
                   ) : null}
                 </div>
                 <Badge variant="outline" className={badge.className}>
-                  {badge.label}
+                  {isWaitingFire ? "Esperando disparo" : badge.label}
                 </Badge>
               </div>
 
@@ -704,6 +921,22 @@ function KitchenOrderCard({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
+        {nextPendingCourse ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex items-center gap-2 border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100"
+            onClick={() => onFireCourse(order.id, nextPendingCourse)}
+            disabled={isFiring || isOrderUpdating}
+          >
+            {isFiring ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Flame className="h-4 w-4" />
+            )}
+            Fire curso {nextPendingCourse}
+          </Button>
+        ) : null}
         {order.status !== "READY" && progressPct === 100 && totalCount > 0 ? (
           <Button
             size="sm"
@@ -746,5 +979,44 @@ function KitchenOrderCard({
         </Button>
       </div>
     </div>
+  );
+}
+
+function PrepCountdown({
+  firedAt,
+  prepMinutes,
+}: {
+  firedAt: string;
+  prepMinutes: number;
+}) {
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const firedMs = new Date(firedAt).getTime();
+  const targetMs = firedMs + prepMinutes * 60_000;
+  const diffMs = targetMs - now;
+  const overdue = diffMs < 0;
+  const minutes = Math.floor(Math.abs(diffMs) / 60_000);
+  const seconds = Math.floor((Math.abs(diffMs) % 60_000) / 1000);
+  const label = `${minutes}:${String(seconds).padStart(2, "0")}`;
+
+  return (
+    <Badge
+      variant="outline"
+      className={`px-1.5 py-0 text-[10px] ${
+        overdue
+          ? "border-red-300 bg-red-50 text-red-700"
+          : minutes < 2
+            ? "border-amber-300 bg-amber-50 text-amber-700"
+            : "border-slate-300 bg-white text-slate-700"
+      }`}
+    >
+      <Clock3 className="mr-0.5 h-2.5 w-2.5" />
+      {overdue ? `+${label}` : label}
+    </Badge>
   );
 }

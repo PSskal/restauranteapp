@@ -1,43 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/auth";
 import { PLAN_LIMITS } from "@/data/plans";
 import { prisma } from "@/lib/prisma";
 import { ensureActivePlan, ensureActivePlans } from "@/lib/plan-expiration";
+import { checkRate, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { log } from "@/lib/logger";
+
+const createOrgSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(100),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(2, "Slug muy corto")
+    .max(60)
+    .regex(
+      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
+      "Solo letras minúsculas, números y guiones"
+    ),
+  ownerId: z.string().min(1),
+});
 
 export async function POST(request: NextRequest) {
-  let session;
-  let name, slug, ownerId;
-
   try {
-    // Verificar autenticación
-    session = await auth();
-    console.log("Session in organizations API:", session);
-
+    const session = await auth();
     if (!session?.user?.id) {
-      console.log("No session or user ID found");
       return NextResponse.json({ message: "No autorizado" }, { status: 401 });
     }
 
-    // Obtener datos del body
-    const body = await request.json();
-    ({ name, slug, ownerId } = body);
-    console.log("Request body:", body);
+    // 5 creaciones por hora por usuario es más que suficiente y bloquea abuso
+    const rl = await checkRate(
+      "organizations.create",
+      `${getClientIp(request)}:${session.user.id}`,
+      { max: 5, windowMs: 60 * 60 * 1000 }
+    );
+    if (!rl.ok) return rateLimitResponse(rl);
 
-    // Validaciones básicas
-    if (!name?.trim() || !slug?.trim()) {
+    let jsonBody: unknown;
+    try {
+      jsonBody = await request.json();
+    } catch {
       return NextResponse.json(
-        { message: "Nombre y slug son requeridos" },
+        { message: "JSON inválido" },
         { status: 400 }
       );
     }
 
-    // Verificar que el usuario existe en la BD (o crearlo si es la primera vez)
+    const parsed = createOrgSchema.safeParse(jsonBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: "Datos inválidos", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { name, slug, ownerId } = parsed.data;
+
+    // Asegura que el usuario exista (primera vez con JWT puede no estar)
     let user = await prisma.user.findUnique({
       where: { id: session.user.id },
     });
 
     if (!user && session.user.email) {
-      // Crear usuario si no existe (primera vez con JWT)
       user = await prisma.user.create({
         data: {
           id: session.user.id,
@@ -46,10 +71,8 @@ export async function POST(request: NextRequest) {
           image: session.user.image,
         },
       });
-      console.log("Created new user:", user);
     }
 
-    // Verificar que el usuario solo pueda crear organizaciones para sí mismo
     if (ownerId !== session.user.id) {
       return NextResponse.json(
         { message: "Solo puedes crear restaurantes para tu propia cuenta" },
@@ -68,7 +91,6 @@ export async function POST(request: NextRequest) {
 
     if (!hasPremiumOrg) {
       const restaurantsLimit = PLAN_LIMITS.FREE.restaurants;
-
       if (
         restaurantsLimit !== null &&
         existingOwnedOrgs.length >= restaurantsLimit
@@ -76,35 +98,32 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             message:
-              "El plan Free solo permite crear 1 restaurante. Actualiza tu plan para gestionar m�s organizaciones.",
+              "El plan Free solo permite crear 1 restaurante. Actualiza tu plan para gestionar más organizaciones.",
           },
           { status: 402 }
         );
       }
     }
 
-    // Verificar que el slug no exista
     const existingOrg = await prisma.organization.findUnique({
-      where: { slug: slug.trim().toLowerCase() },
+      where: { slug },
     });
 
     if (existingOrg) {
       return NextResponse.json(
         { message: "Este nombre de URL ya está en uso. Elige otro." },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
-    // Crear la organización
     const organization = await prisma.organization.create({
       data: {
-        name: name.trim(),
-        slug: slug.trim().toLowerCase(),
+        name,
+        slug,
         ownerId: session.user.id,
       },
     });
 
-    // Crear membership automático para el owner
     await prisma.membership.create({
       data: {
         userId: session.user.id,
@@ -115,24 +134,17 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(organization);
   } catch (error) {
-    console.error("Error creating organization:", error);
-    console.error("Session data:", session);
-    console.error("Request data:", { name, slug, ownerId });
+    log.error("organizations.create.exception", error);
 
-    // Manejar error de constraint único
     if (error instanceof Error && error.message.includes("Unique constraint")) {
       return NextResponse.json(
         { message: "Este nombre de URL ya está en uso" },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
     return NextResponse.json(
-      {
-        message: "Error interno del servidor",
-        details: error instanceof Error ? error.message : String(error),
-        sessionId: session?.user?.id || "no-session-id",
-      },
+      { message: "Error interno del servidor" },
       { status: 500 }
     );
   }
@@ -140,27 +152,19 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    // Verificar autenticación
     const session = await auth();
 
     if (!session?.user?.id) {
       return NextResponse.json({ message: "No autorizado" }, { status: 401 });
     }
 
-    // Obtener organizaciones del usuario
     const memberships = await prisma.membership.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      include: {
-        org: true,
-      },
+      where: { userId: session.user.id },
+      include: { org: true },
     });
 
     const ownedOrgs = await prisma.organization.findMany({
-      where: {
-        ownerId: session.user.id,
-      },
+      where: { ownerId: session.user.id },
     });
 
     const normalizedMemberships = await Promise.all(
@@ -177,7 +181,7 @@ export async function GET() {
       ownedOrgs: normalizedOwnedOrgs,
     });
   } catch (error) {
-    console.error("Error fetching organizations:", error);
+    log.error("organizations.fetch.exception", error);
     return NextResponse.json(
       { message: "Error interno del servidor" },
       { status: 500 }

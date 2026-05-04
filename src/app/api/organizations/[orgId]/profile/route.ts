@@ -53,6 +53,9 @@ const payloadSchema = z.object({
     .optional()
     .nullable(),
   whatsappOrderingEnabled: z.boolean().optional(),
+  onlineOrderingEnabled: z.boolean().optional(),
+  pickupEnabled: z.boolean().optional(),
+  deliveryEnabled: z.boolean().optional(),
   openingHours: z.array(openingHourSchema).optional(),
 });
 
@@ -71,6 +74,9 @@ const profileSelect = {
   longitude: true,
   whatsappNumber: true,
   whatsappOrderingEnabled: true,
+  onlineOrderingEnabled: true,
+  pickupEnabled: true,
+  deliveryEnabled: true,
   openingHours: {
     orderBy: { dayOfWeek: "asc" as const },
     select: {
@@ -246,6 +252,21 @@ export async function PATCH(
       } else {
         updateData.whatsappOrderingEnabled = false;
       }
+    }
+
+    if ("onlineOrderingEnabled" in payload) {
+      updateData.onlineOrderingEnabled = !!payload.onlineOrderingEnabled;
+      // Si se desactiva online, también pickup/delivery por seguridad
+      if (!payload.onlineOrderingEnabled) {
+        updateData.pickupEnabled = false;
+        updateData.deliveryEnabled = false;
+      }
+    }
+    if ("pickupEnabled" in payload) {
+      updateData.pickupEnabled = !!payload.pickupEnabled;
+    }
+    if ("deliveryEnabled" in payload) {
+      updateData.deliveryEnabled = !!payload.deliveryEnabled;
     }
 
     let updatedOrganization;

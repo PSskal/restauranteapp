@@ -4,6 +4,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkNumericLimit } from "@/lib/subscription";
+import { checkRate, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { computeOrderTotals } from "@/lib/order-totals";
 
 const ALLOWED_POS_ROLES: Role[] = [
   Role.OWNER,
@@ -21,6 +23,12 @@ const itemSchema = z.object({
     .max(20, "Maximo 20 unidades por producto"),
   notes: z.string().trim().max(200, "Maximo 200 caracteres").optional(),
   modifierIds: z.array(z.string().min(1)).max(30).optional(),
+  courseNumber: z
+    .number()
+    .int()
+    .min(1)
+    .max(9, "El curso máximo es 9")
+    .optional(),
 });
 
 const createOrderSchema = z.object({
@@ -59,6 +67,14 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    // 30 pedidos por minuto por org+usuario+IP es suficiente para uso humano normal
+    const rl = await checkRate(
+      "orders.create",
+      `${orgId}:${getClientIp(request)}:${session.user.id}`,
+      { max: 30, windowMs: 60_000 }
+    );
+    if (!rl.ok) return rateLimitResponse(rl);
 
     const [membership, organization] = await Promise.all([
       prisma.membership.findFirst({
@@ -200,6 +216,9 @@ export async function POST(
       modifiersPriceC: number;
       totalC: number;
       notes: string | null;
+      courseNumber: number;
+      stationId: string | null;
+      prepMinutes: number | null;
       modifiers: Array<{
         modifierId: string;
         groupName: string;
@@ -307,6 +326,9 @@ export async function POST(
         modifiersPriceC,
         totalC,
         notes: item.notes?.trim() || null,
+        courseNumber: item.courseNumber ?? 1,
+        stationId: menuItem.stationId ?? null,
+        prepMinutes: menuItem.prepMinutes ?? null,
         modifiers: selectedModifiersSnapshot,
       });
     }
@@ -328,6 +350,7 @@ export async function POST(
 
       const nextOrderNumber = (lastOrder?.number ?? 0) + 1;
 
+      const now = new Date();
       return tx.order.create({
         data: {
           orgId,
@@ -346,6 +369,13 @@ export async function POST(
               modifiersPriceC: item.modifiersPriceC,
               totalC: item.totalC,
               notes: item.notes,
+              courseNumber: item.courseNumber,
+              stationId: item.stationId,
+              prepMinutes: item.prepMinutes,
+              // Al auto-aceptar, se dispara sólo el primer curso; el resto
+              // queda en PENDING esperando Fire.
+              firedAt:
+                autoAccept && item.courseNumber === 1 ? now : null,
               modifiers: {
                 create: item.modifiers.map((modifier) => ({
                   modifierId: modifier.modifierId,
@@ -368,6 +398,11 @@ export async function POST(
               totalC: true,
               notes: true,
               status: true,
+              courseNumber: true,
+              stationId: true,
+              prepMinutes: true,
+              firedAt: true,
+              station: { select: { id: true, name: true, color: true } },
               modifiers: {
                 select: {
                   id: true,
@@ -413,6 +448,11 @@ export async function POST(
             totalC: item.totalC,
             notes: item.notes,
             status: item.status,
+            courseNumber: item.courseNumber,
+            stationId: item.stationId,
+            prepMinutes: item.prepMinutes,
+            firedAt: item.firedAt,
+            station: item.station,
             modifiers: item.modifiers.map((modifier) => ({
               id: modifier.id,
               groupName: modifier.groupName,
@@ -529,8 +569,13 @@ export async function GET(
                 totalC: true,
                 notes: true,
                 status: true,
+                courseNumber: true,
+                stationId: true,
+                prepMinutes: true,
+                firedAt: true,
                 readyAt: true,
                 servedAt: true,
+                station: { select: { id: true, name: true, color: true } },
                 modifiers: {
                   select: {
                     id: true,
@@ -614,24 +659,24 @@ export async function GET(
 
     return NextResponse.json({
       orders: orders.map((order) => {
-        const discountsC = order.discounts.reduce(
-          (sum, d) => sum + d.amountC,
-          0
-        );
-        const netDueC = Math.max(0, order.totalC - discountsC);
-        const paidC = order.payments
-          .filter((p) => p.status === PaymentStatus.PAID)
-          .reduce((sum, p) => sum + p.amountC, 0);
-        const tipsC = order.payments
-          .filter((p) => p.status === PaymentStatus.PAID)
-          .reduce((sum, p) => sum + p.tipC, 0);
-        const remainingC = Math.max(0, netDueC - paidC);
-        const isPaid = netDueC === 0 ? false : paidC >= netDueC;
+        const totals = computeOrderTotals({
+          totalC: order.totalC,
+          discounts: order.discounts,
+          payments: order.payments,
+        });
+        const { discountsC, netDueC, paidC, tipsC, remainingC, isPaid } =
+          totals;
 
         return {
           id: order.id,
           number: order.number,
           status: order.status,
+          kind: order.kind,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerEmail: order.customerEmail,
+          deliveryAddress: order.deliveryAddress,
+          pickupTime: order.pickupTime,
           totalC: order.totalC,
           discountsC,
           netDueC,
@@ -675,8 +720,13 @@ export async function GET(
             totalC: item.totalC,
             notes: item.notes,
             status: item.status,
+            courseNumber: item.courseNumber,
+            stationId: item.stationId,
+            prepMinutes: item.prepMinutes,
+            firedAt: item.firedAt,
             readyAt: item.readyAt,
             servedAt: item.servedAt,
+            station: item.station,
             modifiers: item.modifiers.map((modifier) => ({
               id: modifier.id,
               groupName: modifier.groupName,

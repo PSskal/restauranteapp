@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
+
+const patchSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(32, "Máximo 32 caracteres"),
+});
 
 export async function PATCH(
   request: Request,
@@ -13,21 +19,25 @@ export async function PATCH(
     }
 
     const { orgId } = await params;
-    const body = await request.json();
-    const { name } = body;
 
-    if (!name || typeof name !== "string") {
-      return NextResponse.json({ error: "Nombre inválido" }, { status: 400 });
+    let jsonBody: unknown;
+    try {
+      jsonBody = await request.json();
+    } catch {
+      return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
     }
 
-    if (name.length > 32) {
+    const parsed = patchSchema.safeParse(jsonBody);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "El nombre no puede tener más de 32 caracteres" },
+        { error: "Datos inválidos", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
-    // Verificar que el usuario tenga acceso a esta organización
+    const { name } = parsed.data;
+
+    // Sólo OWNER o MANAGER pueden cambiar el nombre del restaurante
     const hasAccess = await prisma.organization.findFirst({
       where: {
         id: orgId,
@@ -37,6 +47,7 @@ export async function PATCH(
             memberships: {
               some: {
                 userId: session.user.id,
+                role: { in: ["OWNER", "MANAGER"] },
               },
             },
           },
@@ -45,35 +56,53 @@ export async function PATCH(
     });
 
     if (!hasAccess) {
-      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+      return NextResponse.json(
+        { error: "No tienes permisos para renombrar el restaurante" },
+        { status: 403 }
+      );
     }
 
-    // Generar slug a partir del nombre
+    // Genera slug seguro a partir del nombre
     const slug = name
-      .trim()
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // Eliminar acentos
-      .replace(/[^a-z0-9\s-]/g, "") // Eliminar caracteres especiales
-      .replace(/\s+/g, "-") // Reemplazar espacios con guiones
-      .replace(/-+/g, "-") // Reemplazar múltiples guiones con uno solo
-      .replace(/^-|-$/g, ""); // Eliminar guiones al inicio y final
+      // Elimina marcas combinatorias (acentos)
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
 
-    // Actualizar el nombre y slug de la organización
+    if (!slug) {
+      return NextResponse.json(
+        { error: "El nombre no genera un slug válido" },
+        { status: 400 }
+      );
+    }
+
+    // Si el slug nuevo ya está tomado por otra org, abortamos
+    const collision = await prisma.organization.findFirst({
+      where: { slug, id: { not: orgId } },
+      select: { id: true },
+    });
+    if (collision) {
+      return NextResponse.json(
+        { error: "Ya existe otro restaurante con un nombre similar" },
+        { status: 409 }
+      );
+    }
+
     const updatedOrg = await prisma.organization.update({
       where: { id: orgId },
-      data: {
-        name,
-        slug,
-      },
+      data: { name, slug },
     });
 
     return NextResponse.json({
-      message: "Nombre actualizado exitosamente",
+      message: "Nombre actualizado",
       organization: updatedOrg,
     });
   } catch (error) {
-    console.error("Error updating organization name:", error);
+    log.error("organizations.rename.exception", error);
     return NextResponse.json(
       { error: "Error al actualizar el nombre" },
       { status: 500 }

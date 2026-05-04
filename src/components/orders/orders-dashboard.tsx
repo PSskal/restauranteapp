@@ -89,10 +89,18 @@ type OrderPayment = {
   createdAt: string;
 };
 
+type OrderKind = "DINE_IN" | "PICKUP" | "DELIVERY";
+
 type StaffOrder = {
   id: string;
   number: number;
   status: OrderStatus;
+  kind?: OrderKind;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  deliveryAddress?: string | null;
+  pickupTime?: string | null;
   totalC: number;
   discountsC?: number;
   netDueC?: number;
@@ -805,11 +813,25 @@ function OrderCard({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-bold">
-              {order.table ? `Mesa ${order.table.number}` : "Sin Mesa"}
+              {order.kind === "PICKUP"
+                ? "Recoger"
+                : order.kind === "DELIVERY"
+                  ? "Delivery"
+                  : order.table
+                    ? `Mesa ${order.table.number}`
+                    : "Sin Mesa"}
             </h3>
             <Badge variant={statusBadgeVariants[order.status]}>
               {statusLabels[order.status]}
             </Badge>
+            {order.kind && order.kind !== "DINE_IN" ? (
+              <Badge
+                variant="outline"
+                className="border-purple-200 bg-purple-50 text-purple-700"
+              >
+                {order.kind === "PICKUP" ? "Online · Recoger" : "Online · Delivery"}
+              </Badge>
+            ) : null}
             <Badge
               variant="outline"
               className={
@@ -824,6 +846,17 @@ function OrderCard({
           <p className="text-sm text-muted-foreground">
             Pedido #{order.number} • {formatTime(order.createdAt)}
           </p>
+          {order.kind && order.kind !== "DINE_IN" && order.customerName ? (
+            <p className="mt-1 text-xs text-slate-700">
+              <span className="font-semibold">{order.customerName}</span>
+              {order.customerPhone ? ` · ${order.customerPhone}` : ""}
+            </p>
+          ) : null}
+          {order.deliveryAddress ? (
+            <p className="text-xs text-slate-600">
+              📍 {order.deliveryAddress}
+            </p>
+          ) : null}
         </div>
         <div className="text-right font-semibold text-green-600">
           {formatCurrency(order.totalC)}
